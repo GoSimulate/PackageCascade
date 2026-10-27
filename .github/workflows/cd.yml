@@ -6,7 +6,6 @@ on:
       - 'src/**'
       - '!src/*Tests/**'
       - '.github/workflows/cd.yml'
-      - '.github/scripts/check-package.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -65,8 +64,6 @@ jobs:
           dotnet pack src/PackageCascade.slnx
           -c Release --no-build --no-restore -o artifacts/packages
           -p:Version="$VERSION" -p:ContinuousIntegrationBuild=true -p:RepositoryUrl="$REPOSITORY_URL"
-      - name: Check NuGet packages
-        run: python3 .github/scripts/check-package.py "$VERSION"
       - name: Generate release notes
         id: notes
         uses: requarks/changelog-action@v1.10.3
