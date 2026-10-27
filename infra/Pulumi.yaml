@@ -1,4 +1,0 @@
-name: PackageCascade
-runtime: dotnet
-main: ./PackageCascade.Infrastructure/PackageCascade.Infrastructure.csproj
-description: Infrastructure for PackageCascade.
