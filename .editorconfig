@@ -34,6 +34,9 @@ dotnet_diagnostic.IDE0090.severity = warning
 csharp_style_prefer_primary_constructors = false
 dotnet_diagnostic.IDE0290.severity = none
 
+# Flag methods with high cyclomatic complexity.
+dotnet_diagnostic.CA1502.severity = warning
+
 # Requires StyleCop.Analyzers in the consuming project. Its default setting
 # only covers some type kinds; strict one-type-per-file also needs stylecop.json.
 dotnet_diagnostic.SA1402.severity = warning
