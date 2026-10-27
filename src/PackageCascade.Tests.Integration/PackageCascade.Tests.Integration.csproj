@@ -7,6 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="TUnit" Version="1.68.4" />
-    <ProjectReference Include="../TemplateProject/TemplateProject.csproj" />
+    <ProjectReference Include="../PackageCascade/PackageCascade.csproj" />
   </ItemGroup>
 </Project>

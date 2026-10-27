@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="PackageCascade/PackageCascade.csproj" />
+  <Project Path="PackageCascade.Tests.Unit/PackageCascade.Tests.Unit.csproj" />
+  <Project Path="PackageCascade.Tests.Integration/PackageCascade.Tests.Integration.csproj" />
+</Solution>

@@ -1,4 +1,4 @@
-name: TemplateProject
+name: PackageCascade
 runtime: dotnet
-main: ./TemplateProject.Infrastructure/TemplateProject.Infrastructure.csproj
-description: Infrastructure for TemplateProject.
+main: ./PackageCascade.Infrastructure/PackageCascade.Infrastructure.csproj
+description: Infrastructure for PackageCascade.

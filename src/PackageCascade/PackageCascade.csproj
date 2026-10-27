@@ -3,7 +3,7 @@
     <TargetFramework>net11.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <InternalsVisibleTo Include="TemplateProject.Tests.Unit" />
+    <InternalsVisibleTo Include="PackageCascade.Tests.Unit" />
     <PackageReference Include="ArchonAnalysers" Version="1.0.0" PrivateAssets="all" />
   </ItemGroup>
 </Project>

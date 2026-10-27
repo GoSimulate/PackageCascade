@@ -1,4 +1,4 @@
-# TemplateProject
+# PackageCascade
 
 This private GoSim template starts a .NET 11 class library with TUnit unit and integration tests and an empty C# Pulumi stack.
 
@@ -15,10 +15,10 @@ The rename script updates the source and infrastructure project identities, name
 Install the SDK version in `global.json` (currently .NET 11 RC2), then run:
 
 ```sh
-dotnet test --solution src/TemplateProject.slnx -c Release
+dotnet test --solution src/PackageCascade.slnx -c Release
 ```
 
-The projects are `TemplateProject`, `TemplateProject.Tests.Unit`, and `TemplateProject.Tests.Integration`. The unit test project can access the library's internal members through `InternalsVisibleTo`; the integration test uses its public surface.
+The projects are `PackageCascade`, `PackageCascade.Tests.Unit`, and `PackageCascade.Tests.Integration`. The unit test project can access the library's internal members through `InternalsVisibleTo`; the integration test uses its public surface.
 
 The `infra/` Pulumi program declares no resources. To preview it without a cloud account, create a disposable local backend and stack:
 

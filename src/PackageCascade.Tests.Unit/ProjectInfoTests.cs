@@ -1,6 +1,6 @@
-using TemplateProject;
+using PackageCascade;
 
-namespace TemplateProject.Tests.Unit;
+namespace PackageCascade.Tests.Unit;
 
 public class ProjectInfoTests
 {
