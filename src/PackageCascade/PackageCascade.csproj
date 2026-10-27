@@ -13,6 +13,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="PackageCascade.Tests.Unit" />
     <PackageReference Include="ArchonAnalysers" Version="1.0.0" PrivateAssets="all" />
+    <PackageReference Include="LibGit2Sharp" Version="0.32.0" />
     <PackageReference Include="Microsoft.Build" Version="18.10.1" ExcludeAssets="runtime" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Build.Locator" Version="1.11.2" />
   </ItemGroup>
