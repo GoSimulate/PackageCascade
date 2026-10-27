@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="TemplateProject/TemplateProject.csproj" />
+  <Project Path="TemplateProject.Tests.Unit/TemplateProject.Tests.Unit.csproj" />
+  <Project Path="TemplateProject.Tests.Integration/TemplateProject.Tests.Integration.csproj" />
+</Solution>

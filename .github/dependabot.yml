@@ -1,0 +1,33 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directories:
+      - /src/*
+      - /infra/*
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      nuget:
+        patterns:
+          - '*'
+      nuget-security:
+        applies-to: security-updates
+        patterns:
+          - '*'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      actions:
+        patterns:
+          - '*'
+      actions-security:
+        applies-to: security-updates
+        patterns:
+          - '*'

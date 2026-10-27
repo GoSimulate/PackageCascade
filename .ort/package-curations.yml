@@ -1,0 +1,7 @@
+- id: "NuGet::OneOf:3.0.216"
+  curations:
+    comment: >-
+      OneOf declares a licence URL instead of an SPDX expression. Its licence
+      is MIT: https://github.com/mcintyre321/OneOf/blob/master/licence.md
+    declared_license_mapping:
+      "https://github.com/mcintyre321/OneOf/blob/master/licence.md": "MIT"

@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  select:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    outputs:
+      run_tests: ${{ steps.changes.outputs.run }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select relevant paths
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] || [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = 0000000000000000000000000000000000000000 ]; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          elif [ -n "$(git diff --name-only "$BASE_SHA" HEAD -- src/ global.json .github/workflows/ci.yml)" ]; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
+  test:
+    needs: select
+    if: needs.select.outputs.run_tests == 'true'
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Build
+        run: dotnet build src/TemplateProject.slnx -c Release
+      - name: Test
+        run: dotnet test --solution src/TemplateProject.slnx -c Release --no-build --no-restore

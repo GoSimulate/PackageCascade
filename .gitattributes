@@ -1,0 +1,19 @@
+# Normalise everything to LF on checkin; let git guess text vs binary for anything not listed below.
+* text=auto eol=lf
+
+# requirements.txt is UTF-16LE with CRLF by design (see CLAUDE.md) - leave it untouched.
+requirements.txt -text
+
+# Vendored solver binaries and toolchains - never touch, never diff as text.
+runtime/** -text -diff
+
+# Test fixtures / compressed archives - binary, no line-ending normalisation.
+*.gsp.gz binary
+*.gz binary
+*.pdf binary
+*.png binary
+*.ico binary
+*.dll binary
+*.exe binary
+*.tar.bz2 binary
+*.tar.lzma binary

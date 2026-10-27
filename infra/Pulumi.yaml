@@ -1,0 +1,4 @@
+name: TemplateProject
+runtime: dotnet
+main: ./TemplateProject.Infrastructure/TemplateProject.Infrastructure.csproj
+description: Infrastructure for TemplateProject.

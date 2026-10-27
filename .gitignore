@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+.idea/
+.vs/
+.pulumi/
+**/__pycache__/
+*.pyc
+infra/Pulumi.local.yaml
+infra/Pulumi.ci.yaml
+TestResults/
+artifacts/
+*.user
