@@ -1,0 +1,115 @@
+name: Release
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - '!src/*Tests/**'
+      - '.github/workflows/cd.yml'
+      - '.github/scripts/check-package.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  version:
+    if: github.ref == 'refs/heads/main'
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 5
+    outputs:
+      current: ${{ steps.semver.outputs.current }}
+      next: ${{ steps.semver.outputs.next }}
+      version: ${{ steps.semver.outputs.nextStrict }}
+    steps:
+      - name: Calculate next version
+        id: semver
+        uses: ietf-tools/semver-action@v1.11.0
+        with:
+          token: ${{ github.token }}
+          branch: ${{ github.sha }}
+          minorList: feat
+          patchList: fix,perf
+          noNewCommitBehavior: silent
+          noVersionBumpBehavior: silent
+  release:
+    needs: version
+    if: needs.version.outputs.version != ''
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      REPOSITORY_URL: ${{ github.server_url }}/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-dotnet@v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore src/PackageCascade.slnx
+      - name: Build
+        run: >-
+          dotnet build src/PackageCascade.slnx -c Release --no-restore
+          -p:Version="$VERSION" -p:ContinuousIntegrationBuild=true -p:RepositoryUrl="$REPOSITORY_URL"
+      - name: Test
+        run: dotnet test --solution src/PackageCascade.slnx -c Release --no-build --no-restore --report-trx --results-directory artifacts/test-results
+      - name: Pack
+        run: >-
+          dotnet pack src/PackageCascade.slnx
+          -c Release --no-build --no-restore -o artifacts/packages
+          -p:Version="$VERSION" -p:ContinuousIntegrationBuild=true -p:RepositoryUrl="$REPOSITORY_URL"
+      - name: Check NuGet packages
+        run: python3 .github/scripts/check-package.py "$VERSION"
+      - name: Generate release notes
+        id: notes
+        uses: requarks/changelog-action@v1.10.3
+        with:
+          token: ${{ github.token }}
+          fromTag: ${{ github.sha }}
+          toTag: ${{ needs.version.outputs.current }}
+          writeToFile: false
+          useGitmojis: false
+          includeRefIssues: false
+          excludeTypes: ''
+      - name: NuGet trusted publishing login
+        uses: NuGet/login@v1
+        id: nuget-login
+        with:
+          user: ${{ vars.NUGET_USER }}
+      - name: Publish to nuget.org
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: >-
+          dotnet nuget push 'artifacts/packages/*.nupkg'
+          --source https://api.nuget.org/v3/index.json
+          --api-key "$NUGET_API_KEY" --skip-duplicate
+      - name: Publish to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PACKAGE_SOURCE: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
+        run: >-
+          dotnet nuget push 'artifacts/packages/*.nupkg'
+          --source "$PACKAGE_SOURCE"
+          --api-key "$GITHUB_TOKEN" --skip-duplicate --no-symbols
+      - name: Create GitHub release
+        uses: ncipollo/release-action@v1.21.0
+        with:
+          token: ${{ github.token }}
+          tag: ${{ needs.version.outputs.next }}
+          commit: ${{ github.sha }}
+          body: ${{ steps.notes.outputs.changes }}
+          artifacts: artifacts/packages/*.nupkg,artifacts/packages/*.snupkg
+          artifactErrorsFailBuild: true
+          makeLatest: true
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: release-results
+          path: artifacts/
