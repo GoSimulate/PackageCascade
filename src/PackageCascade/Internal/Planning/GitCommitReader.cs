@@ -26,25 +26,29 @@ internal sealed class GitCommitReader
 		List<GitCommitDetails> commits = new();
 		foreach (Commit commit in repository.Commits.QueryBy(filter))
 		{
-			Commit parent = commit.Parents.First();
-			TreeChanges changes = repository.Diff.Compare<TreeChanges>(parent.Tree, commit.Tree);
-			HashSet<string> changedPaths = new(StringComparer.Ordinal);
-			foreach (TreeEntryChanges change in changes)
-			{
-				if (!string.IsNullOrEmpty(change.Path))
-				{
-					changedPaths.Add(change.Path);
-				}
-				if (!string.IsNullOrEmpty(change.OldPath))
-				{
-					changedPaths.Add(change.OldPath);
-				}
-			}
-
-			commits.Add(new GitCommitDetails(commit.Sha, commit.Message.Trim(),
-				changedPaths.Order(StringComparer.Ordinal).ToArray()));
+			commits.Add(new GitCommitDetails(commit.Sha, commit.Message.Trim(), GetChangedPaths(repository, commit)));
 		}
 
 		return commits;
+	}
+
+	private static IReadOnlyList<string> GetChangedPaths(Repository repository, Commit commit)
+	{
+		Commit parent = commit.Parents.First();
+		TreeChanges changes = repository.Diff.Compare<TreeChanges>(parent.Tree, commit.Tree);
+		HashSet<string> changedPaths = new(StringComparer.Ordinal);
+		foreach (TreeEntryChanges change in changes)
+		{
+			if (!string.IsNullOrEmpty(change.Path))
+			{
+				changedPaths.Add(change.Path);
+			}
+			if (!string.IsNullOrEmpty(change.OldPath))
+			{
+				changedPaths.Add(change.OldPath);
+			}
+		}
+
+		return changedPaths.Order(StringComparer.Ordinal).ToArray();
 	}
 }
