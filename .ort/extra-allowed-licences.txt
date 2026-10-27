@@ -1,0 +1,1 @@
+GPL-2.0-only WITH GCC-exception-2.0
