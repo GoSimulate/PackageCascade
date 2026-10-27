@@ -1,10 +1,17 @@
-val allowedLicences = setOf(
+val extraAllowedLicencesFile = java.io.File("/project/.ort/extra-allowed-licences.txt")
+val extraAllowedLicences = if (extraAllowedLicencesFile.exists()) {
+    extraAllowedLicencesFile.readLines().map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+} else {
+    emptySet()
+}
+
+val allowedLicences = (setOf(
     "MIT",
     "Apache-2.0",
     "BSD-2-Clause",
     "BSD-3-Clause",
     "ISC"
-).map { it.toSpdx() as SpdxSingleLicenseExpression }.toSet()
+) + extraAllowedLicences).map { it.toSpdx() as SpdxSingleLicenseExpression }.toSet()
 
 // TUnit pulls this test-only coverage tool into the template. Microsoft .NET
 // Library terms permit development and testing, but it is not an SPDX licence.
@@ -26,13 +33,14 @@ val licenceRules = ruleSet(ortResult, licenseInfoResolver, resolutionProvider) {
         val isTestProject = project.id.name.endsWith(".Tests.Unit.csproj") ||
             project.id.name.endsWith(".Tests.Integration.csproj")
         val isReviewedTestCoverage = isTestProject && pkg.metadata.id.toCoordinates() == testCoverageException
-
         if (pkg.metadata.id.type == "NuGet" && pkg.metadata.id.version.isNotEmpty() &&
             !isReviewedTestCoverage
         ) {
-            if (pkg.metadata.declaredLicensesProcessed.spdxExpression == null) {
+            if (pkg.metadata.declaredLicensesProcessed.spdxExpression == null &&
+                !hasConcludedLicense().matches()
+            ) {
                 error(
-                    "No recognised licence was declared for ${pkg.metadata.id.toCoordinates()}.",
+                    "No recognised licence was declared or concluded for ${pkg.metadata.id.toCoordinates()}.",
                     "Review the package licence and record a justified exception before approving it."
                 )
             }
