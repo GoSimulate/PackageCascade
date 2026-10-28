@@ -1,4 +1,4 @@
-namespace PackageCascade.Public.Planning;
+namespace PackageCascade.Public.Planning.Definition;
 
 /// <summary>A release caused by conventional commits relevant to the package.</summary>
 /// <param name="Scope">Where the relevant changes were found.</param>

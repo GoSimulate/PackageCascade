@@ -1,4 +1,4 @@
-namespace PackageCascade.Public.Planning;
+namespace PackageCascade.Public.Planning.Definition;
 
 /// <summary>Where a conventional commit's relevant changes were found.</summary>
 public enum ReleaseScope

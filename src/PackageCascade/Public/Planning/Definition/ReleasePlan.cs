@@ -1,6 +1,6 @@
 using NuGet.Versioning;
 
-namespace PackageCascade.Public.Planning;
+namespace PackageCascade.Public.Planning.Definition;
 
 /// <summary>Package releases and dependency versions planned from the repository's current HEAD.</summary>
 /// <param name="EffectiveVersions">Versions to use for selected packages and their packable dependencies, including dependencies that are not being released.</param>

@@ -1,3 +1,5 @@
+using PackageCascade.Public.Planning.Definition;
+
 namespace PackageCascade.Public.Planning;
 
 /// <summary>Plans package releases from a solution's packable projects and Git history.</summary>

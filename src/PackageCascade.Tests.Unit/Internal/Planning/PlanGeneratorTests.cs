@@ -2,6 +2,7 @@ using PackageCascade.Internal.Planning.Git;
 using PackageCascade.Internal.Planning.Projects;
 using PackageCascade.Internal.Planning.SemVer;
 using PackageCascade.Public.Planning;
+using PackageCascade.Public.Planning.Definition;
 using System.Text.Json;
 using NuGet.Versioning;
 using PackageCascade.Internal.Planning;

@@ -1,5 +1,5 @@
 using PackageCascade.Internal.Planning.Git;
-using PackageCascade.Public.Planning;
+using PackageCascade.Public.Planning.Definition;
 using System.Text.RegularExpressions;
 
 namespace PackageCascade.Internal.Planning.SemVer;

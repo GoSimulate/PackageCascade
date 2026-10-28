@@ -3,6 +3,7 @@ using PackageCascade.Internal.Planning.Projects;
 using PackageCascade.Internal.Planning.SemVer;
 using NuGet.Versioning;
 using PackageCascade.Public.Planning;
+using PackageCascade.Public.Planning.Definition;
 
 namespace PackageCascade.Internal.Planning;
 

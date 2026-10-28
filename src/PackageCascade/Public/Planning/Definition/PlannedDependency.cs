@@ -1,6 +1,6 @@
 using NuGet.Versioning;
 
-namespace PackageCascade.Public.Planning;
+namespace PackageCascade.Public.Planning.Definition;
 
 /// <summary>A direct in-solution package dependency expected in a planned release.</summary>
 /// <param name="PackageId">The dependency's package ID.</param>

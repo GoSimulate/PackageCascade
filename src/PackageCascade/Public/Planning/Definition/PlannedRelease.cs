@@ -1,6 +1,6 @@
 using NuGet.Versioning;
 
-namespace PackageCascade.Public.Planning;
+namespace PackageCascade.Public.Planning.Definition;
 
 /// <summary>The proposed release of one packable project.</summary>
 /// <param name="PackageId">The package's evaluated ID.</param>

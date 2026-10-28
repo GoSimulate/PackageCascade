@@ -1,4 +1,4 @@
-namespace PackageCascade.Public.Planning;
+namespace PackageCascade.Public.Planning.Definition;
 
 /// <summary>A release caused by a direct package dependency being released.</summary>
 /// <param name="PackageId">The released dependency's package ID.</param>
