@@ -1,4 +1,4 @@
-namespace PackageCascade.Public.Planning.Definition;
+namespace PackageCascade.Public.Definition;
 
 /// <summary>The strength of a required semantic version increase.</summary>
 public enum SemverBump

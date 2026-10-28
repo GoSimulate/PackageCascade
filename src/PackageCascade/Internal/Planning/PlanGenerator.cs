@@ -1,9 +1,10 @@
 using PackageCascade.Internal.Planning.Git;
+using PackageCascade.Internal.Git;
 using PackageCascade.Internal.Planning.Projects;
 using PackageCascade.Internal.Planning.SemVer;
 using NuGet.Versioning;
 using PackageCascade.Public.Planning;
-using PackageCascade.Public.Planning.Definition;
+using PackageCascade.Public.Definition;
 
 namespace PackageCascade.Internal.Planning;
 
@@ -11,6 +12,7 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 {
 	private readonly ISolutionPackageDiscoverer _packageDiscoverer;
 	private readonly IGitCommitReader _commitReader;
+	private readonly IRepositoryHeadReader _headReader;
 	private readonly IPackageTagReader _tagReader;
 	private readonly IPackageDependencyGraphBuilder _graphBuilder;
 	private readonly IDirectoryBumpCalculator _directoryCalculator;
@@ -19,6 +21,7 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 	public PlanGenerator(
 		ISolutionPackageDiscoverer packageDiscoverer,
 		IGitCommitReader commitReader,
+		IRepositoryHeadReader headReader,
 		IPackageTagReader tagReader,
 		IPackageDependencyGraphBuilder graphBuilder,
 		IDirectoryBumpCalculator directoryCalculator,
@@ -26,6 +29,7 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 	{
 		_packageDiscoverer = packageDiscoverer;
 		_commitReader = commitReader;
+		_headReader = headReader;
 		_tagReader = tagReader;
 		_graphBuilder = graphBuilder;
 		_directoryCalculator = directoryCalculator;
@@ -52,7 +56,39 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 		IReadOnlyList<PlannedRelease> packages = CreatePackages(
 			repositoryPath, layers, selected, graph, tags, directChanges, versions);
 
-		return new(packages, _commitReader.ReadHeadSha(repositoryPath), configuration);
+		IReadOnlyList<ReferencedPackage> referencedPackages = GetReferencedPackages(repositoryPath, selected, graph, tags);
+		string workingDirectory = Path.GetRelativePath(repositoryPath, Path.GetDirectoryName(Path.GetFullPath(solutionPath))!)
+			.Replace('\\', '/');
+		return new(packages, _headReader.ReadHeadSha(repositoryPath), configuration, referencedPackages, workingDirectory);
+	}
+
+	private static IReadOnlyList<ReferencedPackage> GetReferencedPackages(
+		string repositoryPath,
+		IReadOnlySet<PackableProject> selected,
+		IReadOnlyDictionary<PackableProject, IReadOnlyList<PackableProject>> graph,
+		IReadOnlyDictionary<string, PackageReleaseTag> tags)
+	{
+		HashSet<PackableProject> closure = [];
+		Stack<PackableProject> pending = new(selected);
+		while (pending.TryPop(out PackableProject? project))
+		{
+			if (!closure.Add(project))
+			{
+				continue;
+			}
+
+			foreach (PackableProject dependency in graph[project])
+			{
+				pending.Push(dependency);
+			}
+		}
+
+		return closure.Except(selected)
+			.OrderBy(project => project.PackageId, StringComparer.Ordinal)
+			.Select(project => new ReferencedPackage(project.PackageId,
+				Path.GetRelativePath(repositoryPath, project.ProjectPath).Replace('\\', '/'),
+				tags[project.PackageId].Version.ToNormalizedString()))
+			.ToArray();
 	}
 
 	private Dictionary<PackableProject, DirectChange> GetDirectChanges(
@@ -168,7 +204,9 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 				packageId,
 				Path.GetRelativePath(repositoryPath, project.ProjectPath).Replace('\\', '/'),
 				version.ToNormalizedString(),
-				GetReasons(project, previousTag, directChanges[project], selected, graph)));
+				GetReasons(project, previousTag, directChanges[project], selected, graph),
+				graph[project].Select(dependency => dependency.PackageId)
+					.Order(StringComparer.Ordinal).ToArray()));
 		}
 
 		return packages;

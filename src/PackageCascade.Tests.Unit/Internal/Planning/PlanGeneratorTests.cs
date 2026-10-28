@@ -1,8 +1,9 @@
 using PackageCascade.Internal.Planning.Git;
+using PackageCascade.Internal.Git;
 using PackageCascade.Internal.Planning.Projects;
 using PackageCascade.Internal.Planning.SemVer;
 using PackageCascade.Public.Planning;
-using PackageCascade.Public.Planning.Definition;
+using PackageCascade.Public.Definition;
 using System.Text.Json;
 using NuGet.Versioning;
 using PackageCascade.Internal.Planning;
@@ -28,6 +29,8 @@ public sealed class PlanGeneratorTests
 				await Assert.That(package.Version).IsEqualTo("0.1.0");
 				await Assert.That(package.Reasons.Count(reason => reason is InitialReleaseReason)).IsEqualTo(1);
 			}
+
+			await Assert.That(plan.ReferencedPackages).IsEmpty();
 		}
 	}
 
@@ -87,6 +90,9 @@ public sealed class PlanGeneratorTests
 			await AssertCommitReason(plan, "B", SemverBump.Minor, "feat-b");
 			await AssertDependencyReason(plan, "A", "B");
 			await Assert.That(string.Join(",", plan.Packages.Select(package => package.PackageId))).IsEqualTo("B,A");
+			await Assert.That(Release(plan, "A").DependencyIds).IsEquivalentTo(["B"]);
+			await Assert.That(Release(plan, "B").DependencyIds).IsEquivalentTo(["C"]);
+			await Assert.That(plan.ReferencedPackages.Single()).IsEqualTo(new ReferencedPackage("C", "src/C/C.csproj", "3.4.5"));
 		}
 	}
 
@@ -99,6 +105,29 @@ public sealed class PlanGeneratorTests
 		{
 			await AssertVersions(plan, ("A", "1.2.4"));
 			await Assert.That(plan.Packages.Single().PackageId).IsEqualTo("A");
+			await Assert.That(plan.Packages.Single().DependencyIds).IsEquivalentTo(["B"]);
+			await Assert.That(plan.ReferencedPackages.Select(package => package.PackageId)).IsEquivalentTo(["B", "C"]);
+			await Assert.That(plan.ReferencedPackages.Single(package => package.PackageId == "B").Version).IsEqualTo("2.3.4");
+		}
+	}
+
+	[Test]
+	public async Task ReferencedPackageVersionUsesCaseInsensitiveTagIdentity()
+	{
+		Dictionary<string, PackageReleaseTag> tags = new(StringComparer.OrdinalIgnoreCase)
+		{
+			["a"] = Tag("a", "1.2.3", "release-a"),
+			["b"] = Tag("b", "2.3.4", "release-b"),
+		};
+
+		ReleasePlan plan = Generate([Project("A", "B"), Project("B")], tags,
+			[Commit("fix-a", "fix: repair A", "src/A/Api.cs")]);
+
+		using (Assert.Multiple())
+		{
+			await Assert.That(plan.Packages.Single().PackageId).IsEqualTo("A");
+			await Assert.That(plan.Packages.Single().DependencyIds).IsEquivalentTo(["B"]);
+			await Assert.That(plan.ReferencedPackages.Single().Version).IsEqualTo("2.3.4");
 		}
 	}
 
@@ -209,7 +238,11 @@ public sealed class PlanGeneratorTests
 			[Commit("test-feature", "feat: add test coverage", "tests/C.Tests/Tests.cs"),
 			 Commit("workflow-fix", "fix: repair publishing workflow", ".github/workflows/release.yml")]);
 
-		await Assert.That(plan.Packages).IsEmpty();
+		using (Assert.Multiple())
+		{
+			await Assert.That(plan.Packages).IsEmpty();
+			await Assert.That(plan.ReferencedPackages).IsEmpty();
+		}
 	}
 
 	[Test]
@@ -258,6 +291,17 @@ public sealed class PlanGeneratorTests
 		}
 	}
 
+	[Test]
+	public async Task RecordsSolutionDirectoryRelativeToRepository()
+	{
+		PlanGenerator generator = CreateGenerator(Graph(), new StubCommitReader([]), Tags());
+		string solutionPath = Path.Combine(_repositoryPath, "solutions", "nested", "Packages.slnx");
+
+		ReleasePlan plan = generator.Generate(_repositoryPath, solutionPath);
+
+		await Assert.That(plan.WorkingDirectory).IsEqualTo("solutions/nested");
+	}
+
 	private static ReleasePlan Generate(IReadOnlyList<PackableProject> projects,
 		IReadOnlyDictionary<string, PackageReleaseTag> tags, IReadOnlyList<GitCommitDetails>? commits = null)
 	{
@@ -272,7 +316,7 @@ public sealed class PlanGeneratorTests
 
 	private static PlanGenerator CreateGenerator(StubDiscoverer discoverer, IGitCommitReader commits,
 		IReadOnlyDictionary<string, PackageReleaseTag> tags)
-		=> new(discoverer, commits, new StubTagReader(tags), new StubGraphBuilder(),
+		=> new(discoverer, commits, new StubHeadReader(), new StubTagReader(tags), new StubGraphBuilder(),
 			new StubDirectoryBumpCalculator(), new StubPackageBumpCalculator());
 
 	private static async Task AssertVersions(ReleasePlan plan, params (string PackageId, string Version)[] expected)
@@ -350,7 +394,10 @@ public sealed class PlanGeneratorTests
 
 		public IReadOnlyList<GitCommitDetails> ReadSince(string repositoryPath, string baselineCommitHash)
 			=> _commitsByBaseline is null ? _commits : _commitsByBaseline[baselineCommitHash];
+	}
 
+	private sealed class StubHeadReader : IRepositoryHeadReader
+	{
 		public string ReadHeadSha(string repositoryPath) => "head-sha";
 	}
 

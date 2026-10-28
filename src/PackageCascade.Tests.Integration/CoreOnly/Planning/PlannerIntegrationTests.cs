@@ -2,7 +2,7 @@ using LibGit2Sharp;
 using Microsoft.Extensions.DependencyInjection;
 using PackageCascade.Public.DependencyInjection;
 using PackageCascade.Public.Planning;
-using PackageCascade.Public.Planning.Definition;
+using PackageCascade.Public.Definition;
 
 namespace PackageCascade.Tests.Integration.CoreOnly.Planning;
 

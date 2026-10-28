@@ -4,12 +4,6 @@ namespace PackageCascade.Internal.Planning.Git;
 
 internal sealed class GitCommitReader : IGitCommitReader
 {
-	public string ReadHeadSha(string repositoryPath)
-	{
-		using Repository repository = new(repositoryPath);
-		return repository.Head.Tip?.Sha ?? throw new InvalidOperationException("The repository has no HEAD commit.");
-	}
-
 	public IReadOnlyList<GitCommitDetails> ReadSince(string repositoryPath, string baselineCommitHash)
 	{
 		using Repository repository = new(repositoryPath);

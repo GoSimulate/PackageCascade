@@ -1,4 +1,4 @@
-namespace PackageCascade.Public.Planning.Definition;
+namespace PackageCascade.Public.Definition;
 
 /// <summary>A release caused by conventional commits relevant to the package.</summary>
 /// <param name="Bump">The strongest version bump required by those commits.</param>

@@ -7,8 +7,7 @@ internal sealed class PackageBuilder : IPackageBuilder
 {
 	public async Task<IReadOnlyList<string>> Build(PackageBuildInput input, CancellationToken cancellationToken)
 	{
-		string solutionPath = Path.GetFullPath(input.SolutionPath);
-		string workingDirectory = Path.GetDirectoryName(solutionPath)!;
+		string workingDirectory = Path.GetFullPath(input.WorkingDirectory);
 		string outputDirectory = Path.GetFullPath(input.OutputDirectory);
 		Directory.CreateDirectory(outputDirectory);
 

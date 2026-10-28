@@ -1,4 +1,4 @@
-using PackageCascade.Public.Planning.Definition;
+using PackageCascade.Public.Definition;
 
 namespace PackageCascade.Public.Planning;
 
