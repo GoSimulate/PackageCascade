@@ -201,7 +201,9 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 				Path.GetRelativePath(repositoryPath, project.ProjectPath).Replace('\\', '/'),
 				version.ToNormalizedString(),
 				GetReasons(project, previousTag, directChanges[project], selected, graph),
-				graph[project].Select(dependency => dependency.PackageId)
+				graph[project].Where(dependency => project.PackageDependencyProjectPaths.Contains(dependency.ProjectPath,
+					OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal))
+					.Select(dependency => dependency.PackageId)
 					.Order(StringComparer.Ordinal).ToArray()));
 		}
 

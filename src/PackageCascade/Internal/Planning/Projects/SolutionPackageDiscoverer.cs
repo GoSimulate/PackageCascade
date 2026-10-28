@@ -48,6 +48,7 @@ internal sealed class SolutionPackageDiscoverer : ISolutionPackageDiscoverer
 	{
 		string packageId = nodes[0].ProjectInstance.GetPropertyValue("PackageId");
 		HashSet<string> referencedPaths = new(pathComparer);
+		HashSet<string> packageDependencyPaths = new(pathComparer);
 
 		foreach (ProjectGraphNode node in nodes)
 		{
@@ -62,16 +63,41 @@ internal sealed class SolutionPackageDiscoverer : ISolutionPackageDiscoverer
 				throw new InvalidOperationException($"Project '{projectPath}' has different PackageIds across evaluations.");
 			}
 
-			foreach (ProjectItemInstance reference in node.ProjectInstance.GetItems("ProjectReference"))
-			{
-				string referencedPath = reference.GetMetadataValue("FullPath");
-				if (projects.ContainsKey(referencedPath))
-				{
-					referencedPaths.Add(referencedPath);
-				}
-			}
+			CollectReferences(node, projects, referencedPaths, packageDependencyPaths);
 		}
 
-		return new(projectPath, packageId, referencedPaths.OrderBy(path => path, StringComparer.Ordinal).ToImmutableArray());
+		return new(projectPath, packageId, referencedPaths.OrderBy(path => path, StringComparer.Ordinal).ToImmutableArray())
+		{
+			PackageDependencyProjectPaths = packageDependencyPaths.OrderBy(path => path, StringComparer.Ordinal).ToImmutableArray(),
+		};
+	}
+
+	private static void CollectReferences(
+		ProjectGraphNode node,
+		IReadOnlyDictionary<string, ProjectGraphNode[]> projects,
+		HashSet<string> referencedPaths,
+		HashSet<string> packageDependencyPaths)
+	{
+		foreach (ProjectItemInstance reference in node.ProjectInstance.GetItems("ProjectReference"))
+		{
+			string referencedPath = reference.GetMetadataValue("FullPath");
+			if (!projects.ContainsKey(referencedPath))
+			{
+				continue;
+			}
+
+			referencedPaths.Add(referencedPath);
+			if (!IsPrivateReference(reference))
+			{
+				packageDependencyPaths.Add(referencedPath);
+			}
+		}
+	}
+
+	private static bool IsPrivateReference(ProjectItemInstance reference)
+	{
+		return reference.GetMetadataValue("PrivateAssets")
+			.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+			.Contains("all", StringComparer.OrdinalIgnoreCase);
 	}
 }

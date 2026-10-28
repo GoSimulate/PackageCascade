@@ -96,6 +96,24 @@ public sealed class PlanGeneratorTests
 	}
 
 	[Test]
+	public async Task PrivateReferenceStillCascadesAndOrdersReleasesWithoutPackageDependency()
+	{
+		PackableProject application = Project("A", "B") with { PackageDependencyProjectPaths = [] };
+		ReleasePlan plan = Generate([application, Project("B", "C"), Project("C")], Tags(),
+			[Commit("fix-b", "fix: repair B", "src/B/Api.cs")]);
+
+		using (Assert.Multiple())
+		{
+			await AssertVersions(plan, ("A", "1.2.4"), ("B", "2.3.5"));
+			await AssertDependencyReason(plan, "A", "B");
+			await Assert.That(string.Join(",", plan.Packages.Select(package => package.PackageId))).IsEqualTo("B,A");
+			await Assert.That(Release(plan, "A").DependencyIds).IsEmpty();
+			await Assert.That(Release(plan, "B").DependencyIds).IsEquivalentTo(["C"]);
+			await Assert.That(plan.ReferencedPackages.Single()).IsEqualTo(new ReferencedPackage("C", "src/C/C.csproj", "3.4.5"));
+		}
+	}
+
+	[Test]
 	public async Task ApplicationFixDoesNotReleaseItsDependenciesOrUnrelatedPackages()
 	{
 		ReleasePlan plan = Generate(Graph(), Tags(), [Commit("fix-a", "fix: repair A", "src/A/Api.cs")]);

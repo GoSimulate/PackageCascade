@@ -1,5 +1,6 @@
 using PackageCascade.Internal.Planning.Projects;
 using PackageCascade.Internal.Planning;
+using System.Xml.Linq;
 
 namespace PackageCascade.Tests.Unit.Internal.Planning.Projects;
 
@@ -51,9 +52,43 @@ public class SolutionPackageDiscovererTests : IDisposable
 	public async Task CapturesDirectProjectReferences()
 	{
 		IReadOnlyList<PackableProject> packages = new SolutionPackageDiscoverer().Discover(_solutionPath);
+		PackableProject package = packages.Single(package => package.ProjectPath == _explicitProject);
 
-		await Assert.That(packages.Single(package => package.ProjectPath == _explicitProject).ReferencedProjectPaths)
-			.IsEquivalentTo(new[] { _defaultProject });
+		using (Assert.Multiple())
+		{
+			await Assert.That(package.ReferencedProjectPaths).IsEquivalentTo([_defaultProject]);
+			await Assert.That(package.PackageDependencyProjectPaths).IsEquivalentTo([_defaultProject]);
+		}
+	}
+
+	[Test]
+	public async Task PrivateReferenceRemainsInProjectGraphButNotPackageDependencies()
+	{
+		SetDefaultReferencePrivateAssets("build ; ALL");
+
+		PackableProject package = new SolutionPackageDiscoverer().Discover(_solutionPath)
+			.Single(project => project.ProjectPath == _explicitProject);
+
+		using (Assert.Multiple())
+		{
+			await Assert.That(package.ReferencedProjectPaths).IsEquivalentTo([_defaultProject]);
+			await Assert.That(package.PackageDependencyProjectPaths).IsEmpty();
+		}
+	}
+
+	[Test]
+	public async Task PrivateAssetsElementAlsoExcludesPackageDependency()
+	{
+		SetDefaultReferencePrivateAssets("ALL", asElement: true);
+
+		PackableProject package = new SolutionPackageDiscoverer().Discover(_solutionPath)
+			.Single(project => project.ProjectPath == _explicitProject);
+
+		using (Assert.Multiple())
+		{
+			await Assert.That(package.ReferencedProjectPaths).IsEquivalentTo([_defaultProject]);
+			await Assert.That(package.PackageDependencyProjectPaths).IsEmpty();
+		}
 	}
 
 	[Test]
@@ -72,9 +107,13 @@ public class SolutionPackageDiscovererTests : IDisposable
 			""");
 
 		IReadOnlyList<PackableProject> packages = new SolutionPackageDiscoverer().Discover(_solutionPath);
+		PackableProject package = packages.Single(package => package.ProjectPath == _explicitProject);
 
-		await Assert.That(packages.Single(package => package.ProjectPath == _explicitProject).ReferencedProjectPaths)
-			.IsEquivalentTo(new[] { _defaultProject });
+		using (Assert.Multiple())
+		{
+			await Assert.That(package.ReferencedProjectPaths).IsEquivalentTo([_defaultProject]);
+			await Assert.That(package.PackageDependencyProjectPaths).IsEquivalentTo([_defaultProject]);
+		}
 	}
 
 	[Test]
@@ -132,5 +171,22 @@ public class SolutionPackageDiscovererTests : IDisposable
 			""");
 
 		return projectPath;
+	}
+
+	private void SetDefaultReferencePrivateAssets(string value, bool asElement = false)
+	{
+		XDocument document = XDocument.Load(_explicitProject);
+		XElement reference = document.Descendants("ProjectReference")
+			.Single(item => (string?)item.Attribute("Include") == "../Default/Default.csproj");
+		if (asElement)
+		{
+			reference.Add(new XElement("PrivateAssets", value));
+		}
+		else
+		{
+			reference.SetAttributeValue("PrivateAssets", value);
+		}
+
+		document.Save(_explicitProject);
 	}
 }
