@@ -14,6 +14,7 @@ internal sealed class PackageBumpCalculator : IPackageBumpCalculator
 	{
 		Dictionary<PackableProject, SemverBump> bumps = GetDirectBumps(repositoryPath, dependencyGraph.Keys, directoryBumps);
 		Dictionary<PackableProject, List<PackableProject>> dependants = GetDependants(dependencyGraph);
+
 		return PropagateDependencyBumps(bumps, dependants);
 	}
 
@@ -24,12 +25,14 @@ internal sealed class PackageBumpCalculator : IPackageBumpCalculator
 		IReadOnlyDictionary<string, SemverBump> directoryBumps)
 	{
 		Dictionary<PackableProject, SemverBump> bumps = new();
+
 		foreach (PackableProject project in projects)
 		{
 			string directory = Path.GetRelativePath(repositoryPath, Path.GetDirectoryName(project.ProjectPath)!)
 				.Replace('\\', '/');
 			bumps.Add(project, directoryBumps[directory]);
 		}
+
 		return bumps;
 	}
 
@@ -39,6 +42,7 @@ internal sealed class PackageBumpCalculator : IPackageBumpCalculator
 	{
 		Dictionary<PackableProject, List<PackableProject>> dependants = dependencyGraph.Keys
 			.ToDictionary(project => project, _ => new List<PackableProject>());
+
 		foreach ((PackableProject project, IReadOnlyList<PackableProject> dependencies) in dependencyGraph)
 		{
 			foreach (PackableProject dependency in dependencies)
@@ -46,6 +50,7 @@ internal sealed class PackageBumpCalculator : IPackageBumpCalculator
 				dependants[dependency].Add(project);
 			}
 		}
+
 		return dependants;
 	}
 
@@ -58,9 +63,11 @@ internal sealed class PackageBumpCalculator : IPackageBumpCalculator
 		Queue<PackableProject> bumpedProjects = new(bumps
 			.Where(entry => entry.Value != SemverBump.None)
 			.Select(entry => entry.Key));
+
 		while (bumpedProjects.Count > 0)
 		{
 			PackableProject bumpedProject = bumpedProjects.Dequeue();
+
 			foreach (PackableProject dependant in dependants[bumpedProject])
 			{
 				if (bumps[dependant] == SemverBump.None)
@@ -70,6 +77,7 @@ internal sealed class PackageBumpCalculator : IPackageBumpCalculator
 				}
 			}
 		}
+
 		return bumps;
 	}
 }

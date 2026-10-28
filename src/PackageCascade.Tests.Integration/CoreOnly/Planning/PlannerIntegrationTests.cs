@@ -43,15 +43,14 @@ public sealed class PlannerIntegrationTests : IDisposable
 
 		await using ServiceProvider provider = new ServiceCollection().AddPackageCascade().BuildServiceProvider();
 		IPackageCascadePlanner planner = provider.GetRequiredService<IPackageCascadePlanner>();
+
 		ReleasePlan plan = planner.Generate(_directory, solutionPath);
 		PlannedRelease release = plan.Packages.Single();
 
 		using (Assert.Multiple())
 		{
 			await Assert.That(release.PackageId).IsEqualTo("Fixture");
-			await Assert.That(release.PreviousTag).IsEqualTo("Fixture-v1.2.3");
-			await Assert.That(release.Version.ToNormalizedString()).IsEqualTo("1.2.4");
-			await Assert.That(release.Tag).IsEqualTo("Fixture-v1.2.4");
+			await Assert.That(release.Version).IsEqualTo("1.2.4");
 			await Assert.That(release.Reasons.Any(reason => reason is ConventionalCommitReason { Bump: SemverBump.Patch })).IsTrue();
 		}
 	}
@@ -68,6 +67,7 @@ public sealed class PlannerIntegrationTests : IDisposable
 		{
 			Commands.Stage(_repository, path);
 		}
+
 		Signature author = new("PackageCascade Tests", "tests@example.invalid", DateTimeOffset.UtcNow);
 		return _repository.Commit(message, author, author);
 	}

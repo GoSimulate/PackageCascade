@@ -20,16 +20,13 @@ public sealed class PlanGeneratorTests
 		ReleasePlan plan = Generate(Graph(), new Dictionary<string, PackageReleaseTag>());
 
 		await Assert.That(plan.Packages.Select(package => package.PackageId)).IsEquivalentTo(new[] { "A", "B", "C", "D", "Unrelated" });
+
 		foreach (PlannedRelease package in plan.Packages)
 		{
 			using (Assert.Multiple())
 			{
-				await Assert.That(package.Version).IsEqualTo(Version("0.1.0"));
-				await Assert.That(package.PreviousVersion).IsNull();
-				await Assert.That(package.PreviousTag).IsNull();
-				await Assert.That(package.Tag).IsEqualTo(package.PackageId + "-v0.1.0");
+				await Assert.That(package.Version).IsEqualTo("0.1.0");
 				await Assert.That(package.Reasons.Count(reason => reason is InitialReleaseReason)).IsEqualTo(1);
-				await Assert.That(plan.EffectiveVersions[package.PackageId]).IsEqualTo(Version("0.1.0"));
 			}
 		}
 	}
@@ -40,7 +37,7 @@ public sealed class PlanGeneratorTests
 		ReleasePlan plan = Generate([Project("New")], new Dictionary<string, PackageReleaseTag>(),
 			[Commit("breaking", "feat!: introduce API", "src/New/Api.cs")]);
 
-		await Assert.That(plan.Packages.Single().Version).IsEqualTo(Version("0.1.0"));
+		await Assert.That(plan.Packages.Single().Version).IsEqualTo("0.1.0");
 		await Assert.That(plan.Packages.Single().Reasons.Count(reason => reason is InitialReleaseReason)).IsEqualTo(1);
 	}
 
@@ -67,8 +64,7 @@ public sealed class PlanGeneratorTests
 		await AssertDependencyReason(plan, "A", "B");
 		await AssertDependencyReason(plan, "B", "C");
 		await AssertDependencyReason(plan, "D", "C");
-		await Assert.That(string.Join(";", plan.BuildLayers.Select(layer => string.Join(",", layer.Order(StringComparer.Ordinal)))))
-			.IsEqualTo("C;B,D;A");
+		await Assert.That(string.Join(",", plan.Packages.Select(package => package.PackageId))).IsEqualTo("C,B,D,A");
 	}
 
 	[Test]
@@ -79,8 +75,7 @@ public sealed class PlanGeneratorTests
 		await AssertVersions(plan, ("A", "1.2.4"), ("B", "2.4.0"));
 		await AssertCommitReason(plan, "B", SemverBump.Minor, "feat-b");
 		await AssertDependencyReason(plan, "A", "B");
-		await Assert.That(string.Join(";", plan.BuildLayers.Select(layer => string.Join(",", layer))))
-			.IsEqualTo("B;A");
+		await Assert.That(string.Join(",", plan.Packages.Select(package => package.PackageId))).IsEqualTo("B,A");
 	}
 
 	[Test]
@@ -89,7 +84,7 @@ public sealed class PlanGeneratorTests
 		ReleasePlan plan = Generate(Graph(), Tags(), [Commit("fix-a", "fix: repair A", "src/A/Api.cs")]);
 
 		await AssertVersions(plan, ("A", "1.2.4"));
-		await Assert.That(plan.BuildLayers.Single()).IsEquivalentTo(new[] { "A" });
+		await Assert.That(plan.Packages.Single().PackageId).IsEqualTo("A");
 	}
 
 	[Test]
@@ -139,11 +134,13 @@ public sealed class PlanGeneratorTests
 			["Older"] = Tag("Older", "1.0.0", "older-release"),
 			["Newer"] = Tag("Newer", "4.0.0", "newer-release"),
 		};
+
 		StubCommitReader commits = new(new Dictionary<string, IReadOnlyList<GitCommitDetails>>
 		{
 			["older-release"] = [oldFeature],
 			["newer-release"] = [],
 		});
+
 		PlanGenerator generator = CreateGenerator([Project("Older"), Project("Newer")], commits, tags);
 
 		ReleasePlan plan = generator.Generate(_repositoryPath, _solutionPath);
@@ -153,27 +150,20 @@ public sealed class PlanGeneratorTests
 	}
 
 	[Test]
-	public async Task EffectiveVersionsIncludeReleasedVersionsOfUnchangedDependencies()
+	public async Task PlanContainsOnlyPackagesSelectedForRelease()
 	{
 		ReleasePlan plan = Generate(Graph(), Tags(), [Commit("feat-b", "feat: extend B", "src/B/Api.cs")]);
 
 		using (Assert.Multiple())
 		{
-			await Assert.That(plan.EffectiveVersions["A"]).IsEqualTo(Version("1.2.4"));
-			await Assert.That(plan.EffectiveVersions["B"]).IsEqualTo(Version("2.4.0"));
-			await Assert.That(plan.EffectiveVersions["C"]).IsEqualTo(Version("3.4.5"));
-			await Assert.That(plan.Packages.Select(package => package.PackageId)).IsEquivalentTo(new[] { "A", "B" });
-			await Assert.That(Release(plan, "A").Dependencies.Single().PackageId).IsEqualTo("B");
-			await Assert.That(Release(plan, "A").Dependencies.Single().VersionRange.MinVersion).IsEqualTo(Version("2.4.0"));
-			await Assert.That(Release(plan, "B").Dependencies.Single().PackageId).IsEqualTo("C");
-			await Assert.That(Release(plan, "B").Dependencies.Single().VersionRange.MinVersion).IsEqualTo(Version("3.4.5"));
-			await Assert.That(Release(plan, "B").Dependencies.Single().VersionRange.IsMinInclusive).IsTrue();
-			await Assert.That(Release(plan, "B").Dependencies.Single().VersionRange.MaxVersion).IsNull();
+			await Assert.That(string.Join(",", plan.Packages.Select(package => package.PackageId))).IsEqualTo("B,A");
+			await Assert.That(Release(plan, "A").Version).IsEqualTo("1.2.4");
+			await Assert.That(Release(plan, "B").Version).IsEqualTo("2.4.0");
 		}
 	}
 
 	[Test]
-	public async Task RecordsPackageIdentityPreviousReleaseAndProposedTag()
+	public async Task RecordsPackageIdentityProjectPathAndTargetVersion()
 	{
 		ReleasePlan plan = Generate(Graph(), Tags(), [Commit("fix-c", "fix: repair C", "src/C/Api.cs")]);
 		PlannedRelease package = Release(plan, "C");
@@ -181,9 +171,7 @@ public sealed class PlanGeneratorTests
 		using (Assert.Multiple())
 		{
 			await Assert.That(package.ProjectPath.Replace('\\', '/')).IsEqualTo("src/C/C.csproj");
-			await Assert.That(package.PreviousVersion).IsEqualTo(Version("3.4.5"));
-			await Assert.That(package.PreviousTag).IsEqualTo("C-v3.4.5");
-			await Assert.That(package.Tag).IsEqualTo("C-v3.4.6");
+			await Assert.That(package.Version).IsEqualTo("3.4.6");
 		}
 	}
 
@@ -195,7 +183,6 @@ public sealed class PlanGeneratorTests
 			 Commit("workflow-fix", "fix: repair publishing workflow", ".github/workflows/release.yml")]);
 
 		await Assert.That(plan.Packages).IsEmpty();
-		await Assert.That(plan.BuildLayers).IsEmpty();
 	}
 
 	[Test]
@@ -207,16 +194,11 @@ public sealed class PlanGeneratorTests
 	}
 
 	[Test]
-	public async Task EmptyPlanHasNoEffectiveVersionsOrBuildLayers()
+	public async Task EmptyPlanHasNoPackages()
 	{
 		ReleasePlan plan = Generate(Graph(), Tags());
 
-		using (Assert.Multiple())
-		{
-			await Assert.That(plan.Packages).IsEmpty();
-			await Assert.That(plan.BuildLayers).IsEmpty();
-			await Assert.That(plan.EffectiveVersions).IsEmpty();
-		}
+		await Assert.That(plan.Packages).IsEmpty();
 	}
 
 	[Test]
@@ -234,6 +216,7 @@ public sealed class PlanGeneratorTests
 		IReadOnlyDictionary<string, PackageReleaseTag> tags, IReadOnlyList<GitCommitDetails>? commits = null)
 	{
 		PlanGenerator generator = CreateGenerator(projects, new StubCommitReader(commits ?? []), tags);
+
 		return generator.Generate(_repositoryPath, _solutionPath);
 	}
 
@@ -245,24 +228,24 @@ public sealed class PlanGeneratorTests
 	private static async Task AssertVersions(ReleasePlan plan, params (string PackageId, string Version)[] expected)
 	{
 		await Assert.That(plan.Packages.Select(package => package.PackageId)).IsEquivalentTo(expected.Select(package => package.PackageId));
+
 		foreach ((string packageId, string version) in expected)
 		{
-			await Assert.That(Release(plan, packageId).Version).IsEqualTo(Version(version));
+			await Assert.That(Release(plan, packageId).Version).IsEqualTo(version);
 		}
 	}
 
 	private static async Task AssertCommitReason(ReleasePlan plan, string packageId, SemverBump bump, string sha)
 	{
 		await Assert.That(Release(plan, packageId).Reasons.Any(reason =>
-			reason is ConventionalCommitReason commitReason && commitReason.Scope == ReleaseScope.Project
+			reason is ConventionalCommitReason commitReason
 			&& commitReason.Bump == bump && commitReason.CommitShas.Contains(sha))).IsTrue();
 	}
 
 	private static async Task AssertDependencyReason(ReleasePlan plan, string packageId, string dependencyId)
 	{
 		await Assert.That(Release(plan, packageId).Reasons.Any(reason =>
-			reason is DependencyReleaseReason dependencyReason && dependencyReason.PackageId == dependencyId
-			&& dependencyReason.MinimumBump == SemverBump.Patch)).IsTrue();
+			reason is DependencyReleaseReason dependencyReason && dependencyReason.PackageId == dependencyId)).IsTrue();
 	}
 
 	private static PlannedRelease Release(ReleasePlan plan, string packageId) => plan.Packages.Single(package => package.PackageId == packageId);
@@ -308,6 +291,7 @@ public sealed class PlanGeneratorTests
 		public IReadOnlyDictionary<PackableProject, IReadOnlyList<PackableProject>> Build(IReadOnlyList<PackableProject> projects)
 		{
 			Dictionary<string, PackableProject> byPath = projects.ToDictionary(project => project.ProjectPath, StringComparer.Ordinal);
+
 			return projects.ToDictionary(project => project,
 				project => (IReadOnlyList<PackableProject>)project.ReferencedProjectPaths.Select(path => byPath[path]).ToArray());
 		}
@@ -319,6 +303,7 @@ public sealed class PlanGeneratorTests
 		{
 			Dictionary<string, SemverBump> bumps = directories.ToDictionary(directory => directory,
 				_ => SemverBump.None, StringComparer.Ordinal);
+
 			foreach (GitCommitDetails commit in commits)
 			{
 				SemverBump bump = commit.Message.StartsWith("feat!:", StringComparison.Ordinal)
@@ -326,6 +311,7 @@ public sealed class PlanGeneratorTests
 					: commit.Message.StartsWith("feat:", StringComparison.Ordinal) ? SemverBump.Minor
 					: commit.Message.StartsWith("fix:", StringComparison.Ordinal) ? SemverBump.Patch
 					: SemverBump.None;
+
 				foreach (string directory in bumps.Keys.ToArray())
 				{
 					if (commit.ChangedPaths.Any(path => path.StartsWith(directory + "/", StringComparison.Ordinal))
@@ -335,6 +321,7 @@ public sealed class PlanGeneratorTests
 					}
 				}
 			}
+
 			return bumps;
 		}
 	}
@@ -348,10 +335,12 @@ public sealed class PlanGeneratorTests
 			Dictionary<PackableProject, SemverBump> directBumps = dependencyGraph.Keys.ToDictionary(project => project,
 				project => directoryBumps[Path.GetRelativePath(repositoryPath, Path.GetDirectoryName(project.ProjectPath)!).Replace('\\', '/')]);
 			Dictionary<PackableProject, SemverBump> bumps = new();
+
 			foreach (PackableProject project in dependencyGraph.Keys)
 			{
 				GetBump(project, dependencyGraph, directBumps, bumps);
 			}
+
 			return bumps;
 		}
 
@@ -367,8 +356,10 @@ public sealed class PlanGeneratorTests
 				{
 					bump = SemverBump.Patch;
 				}
+
 				bumps.Add(project, bump);
 			}
+
 			return bump;
 		}
 	}

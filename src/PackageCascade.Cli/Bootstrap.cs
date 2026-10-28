@@ -13,8 +13,13 @@ public class Bootstrap
 		services.AddPackageCascade();
 
 		RegisterCommands(services);
+		ConfigureServices(services);
 
 		return services.BuildServiceProvider();
+	}
+
+	protected virtual void ConfigureServices(IServiceCollection services)
+	{
 	}
 
 	private void RegisterCommands(ServiceCollection services)

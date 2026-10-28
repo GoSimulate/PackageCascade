@@ -39,16 +39,19 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 		IReadOnlyList<PackableProject> projects = _packageDiscoverer.Discover(solutionPath);
 		IReadOnlyDictionary<PackableProject, IReadOnlyList<PackableProject>> graph = _graphBuilder.Build(projects);
 		IReadOnlyDictionary<string, PackageReleaseTag> tags = _tagReader.ReadLatest(repositoryPath, projects.Select(project => project.PackageId));
+
 		Dictionary<PackableProject, DirectChange> directChanges = GetDirectChanges(repositoryPath, projects, tags);
 		Dictionary<string, SemverBump> directoryBumps = directChanges.ToDictionary(entry => GetDirectory(repositoryPath, entry.Key), entry => entry.Value.Bump, StringComparer.Ordinal);
 		IReadOnlyDictionary<PackableProject, SemverBump> bumps = _bumpCalculator.Calculate(repositoryPath, graph, directoryBumps);
+
 		HashSet<PackableProject> selected = bumps.Where(entry => entry.Value != SemverBump.None).Select(entry => entry.Key).ToHashSet();
 		Dictionary<PackableProject, NuGetVersion> versions = GetVersions(selected, tags, bumps);
+
 		IReadOnlyList<IReadOnlyList<string>> layers = GetBuildLayers(selected, graph);
-		IReadOnlyDictionary<string, NuGetVersion> effectiveVersions = GetEffectiveVersions(selected, graph, tags, versions);
 		IReadOnlyList<PlannedRelease> packages = CreatePackages(
-			repositoryPath, layers, selected, graph, tags, directChanges, versions, effectiveVersions);
-		return new(effectiveVersions, packages, layers);
+			repositoryPath, layers, selected, graph, tags, directChanges, versions);
+
+		return new(packages);
 	}
 
 	private Dictionary<PackableProject, DirectChange> GetDirectChanges(
@@ -58,6 +61,7 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 	{
 		Dictionary<PackableProject, DirectChange> changes = new();
 		Dictionary<string, IReadOnlyList<GitCommitDetails>> commitsByBaseline = new(StringComparer.Ordinal);
+
 		foreach (PackableProject project in projects)
 		{
 			if (!tags.TryGetValue(project.PackageId, out PackageReleaseTag? tag))
@@ -74,6 +78,7 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 
 			changes.Add(project, GetDirectChange(commits, GetDirectory(repositoryPath, project)));
 		}
+
 		return changes;
 	}
 
@@ -81,6 +86,7 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 	{
 		SemverBump strongestBump = SemverBump.None;
 		List<string> commitShas = [];
+
 		foreach (GitCommitDetails commit in commits)
 		{
 			SemverBump bump = _directoryCalculator.Calculate([commit], [directory])[directory];
@@ -92,6 +98,7 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 			strongestBump = (SemverBump)Math.Max((int)strongestBump, (int)bump);
 			commitShas.Add(commit.Sha);
 		}
+
 		return new(strongestBump, commitShas.Order(StringComparer.Ordinal).ToArray());
 	}
 
@@ -101,6 +108,7 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 		IReadOnlyDictionary<PackableProject, SemverBump> bumps)
 	{
 		Dictionary<PackableProject, NuGetVersion> versions = new();
+
 		foreach (PackableProject project in selected)
 		{
 			NuGetVersion version = tags.TryGetValue(project.PackageId, out PackageReleaseTag? tag)
@@ -108,37 +116,8 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 				: new(0, 1, 0);
 			versions.Add(project, version);
 		}
+
 		return versions;
-	}
-
-	private static IReadOnlyDictionary<string, NuGetVersion> GetEffectiveVersions(
-		IEnumerable<PackableProject> selected,
-		IReadOnlyDictionary<PackableProject, IReadOnlyList<PackableProject>> graph,
-		IReadOnlyDictionary<string, PackageReleaseTag> tags,
-		IReadOnlyDictionary<PackableProject, NuGetVersion> versions)
-	{
-		HashSet<PackableProject> required = new(selected);
-		Queue<PackableProject> pending = new(required);
-		while (pending.TryDequeue(out PackableProject? project))
-		{
-			foreach (PackableProject dependency in graph[project])
-			{
-				if (required.Add(dependency))
-				{
-					pending.Enqueue(dependency);
-				}
-			}
-		}
-
-		Dictionary<string, NuGetVersion> effectiveVersions = new(StringComparer.Ordinal);
-		foreach (PackableProject project in required.OrderBy(project => project.PackageId, StringComparer.Ordinal))
-		{
-			NuGetVersion version = versions.TryGetValue(project, out NuGetVersion? plannedVersion)
-				? plannedVersion
-				: tags[project.PackageId].Version;
-			effectiveVersions.Add(project.PackageId, version);
-		}
-		return effectiveVersions;
 	}
 
 	private static IReadOnlyList<IReadOnlyList<string>> GetBuildLayers(
@@ -147,6 +126,7 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 	{
 		HashSet<PackableProject> remaining = new(selected);
 		List<IReadOnlyList<string>> layers = [];
+
 		while (remaining.Count > 0)
 		{
 			PackableProject[] ready = remaining
@@ -161,6 +141,7 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 			layers.Add(ready.Select(project => project.PackageId).ToArray());
 			remaining.ExceptWith(ready);
 		}
+
 		return layers;
 	}
 
@@ -171,30 +152,24 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 		IReadOnlyDictionary<PackableProject, IReadOnlyList<PackableProject>> graph,
 		IReadOnlyDictionary<string, PackageReleaseTag> tags,
 		IReadOnlyDictionary<PackableProject, DirectChange> directChanges,
-		IReadOnlyDictionary<PackableProject, NuGetVersion> versions,
-		IReadOnlyDictionary<string, NuGetVersion> effectiveVersions)
+		IReadOnlyDictionary<PackableProject, NuGetVersion> versions)
 	{
 		Dictionary<string, PackableProject> projectsById = selected.ToDictionary(project => project.PackageId, StringComparer.Ordinal);
 		List<PlannedRelease> packages = [];
+
 		foreach (string packageId in layers.SelectMany(layer => layer))
 		{
 			PackableProject project = projectsById[packageId];
 			tags.TryGetValue(packageId, out PackageReleaseTag? previousTag);
 			NuGetVersion version = versions[project];
+
 			packages.Add(new(
 				packageId,
 				Path.GetRelativePath(repositoryPath, project.ProjectPath).Replace('\\', '/'),
-				previousTag?.Version,
-				version,
-				previousTag?.Name,
-				packageId + "-v" + version.ToNormalizedString(),
-				GetReasons(project, previousTag, directChanges[project], selected, graph),
-				graph[project]
-					.OrderBy(dependency => dependency.PackageId, StringComparer.Ordinal)
-					.Select(dependency => new PlannedDependency(
-						dependency.PackageId, new(effectiveVersions[dependency.PackageId], true)))
-					.ToArray()));
+				version.ToNormalizedString(),
+				GetReasons(project, previousTag, directChanges[project], selected, graph)));
 		}
+
 		return packages;
 	}
 
@@ -212,13 +187,14 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 		}
 		else if (directChange.Bump != SemverBump.None)
 		{
-			reasons.Add(new ConventionalCommitReason(ReleaseScope.Project, directChange.Bump, directChange.CommitShas));
+			reasons.Add(new ConventionalCommitReason(directChange.Bump, directChange.CommitShas));
 		}
 
 		foreach (PackableProject dependency in graph[project].Where(selected.Contains).OrderBy(dependency => dependency.PackageId, StringComparer.Ordinal))
 		{
-			reasons.Add(new DependencyReleaseReason(dependency.PackageId, SemverBump.Patch));
+			reasons.Add(new DependencyReleaseReason(dependency.PackageId));
 		}
+
 		return reasons;
 	}
 

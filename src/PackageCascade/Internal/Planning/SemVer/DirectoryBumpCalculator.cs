@@ -10,6 +10,7 @@ internal sealed partial class DirectoryBumpCalculator : IDirectoryBumpCalculator
 	{
 		Dictionary<string, SemverBump> bumps = new(StringComparer.Ordinal);
 		Dictionary<string, string> directoryPrefixes = new(StringComparer.Ordinal);
+
 		foreach (string directory in directories)
 		{
 			bumps.Add(directory, SemverBump.None);
