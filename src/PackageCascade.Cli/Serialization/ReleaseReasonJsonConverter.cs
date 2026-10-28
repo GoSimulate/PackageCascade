@@ -1,6 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using PackageCascade.Public.Planning.Definition;
+using PackageCascade.Public.Definition;
 
 namespace PackageCascade.Cli.Serialization;
 

@@ -1,5 +1,5 @@
 using PackageCascade.Internal.Planning.Projects;
-using PackageCascade.Public.Planning.Definition;
+using PackageCascade.Public.Definition;
 namespace PackageCascade.Internal.Planning.SemVer;
 
 internal interface IPackageBumpCalculator

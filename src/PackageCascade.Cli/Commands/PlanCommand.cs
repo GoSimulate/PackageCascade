@@ -3,7 +3,7 @@ using System.Text.Json;
 using JetBrains.Annotations;
 using PackageCascade.Cli.Serialization;
 using PackageCascade.Public.Planning;
-using PackageCascade.Public.Planning.Definition;
+using PackageCascade.Public.Definition;
 
 namespace PackageCascade.Cli.Commands;
 

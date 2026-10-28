@@ -1,6 +1,6 @@
 using System.Text.Json;
 using PackageCascade.Cli.Serialization;
-using PackageCascade.Public.Planning.Definition;
+using PackageCascade.Public.Definition;
 
 namespace PackageCascade.Cli.Tests.Unit.Serialization;
 
@@ -12,9 +12,10 @@ public sealed class PlanJsonOptionsTests
 		ReleasePlan plan = new(
 			[new PlannedRelease("Fixture", "src/Fixture/Fixture.csproj", "1.2.4-beta.1",
 				[new ConventionalCommitReason(SemverBump.Minor, ["abc"]),
-					new DependencyReleaseReason("Foundation")]),
+					new DependencyReleaseReason("Foundation")], ["Foundation"]),
 				new PlannedRelease("NewPackage", "src/NewPackage/NewPackage.csproj", "0.1.0",
-					[new InitialReleaseReason()])], "target-sha", "Release");
+					[new InitialReleaseReason()], [])], "target-sha", "Release",
+			[new ReferencedPackage("Foundation", "src/Foundation/Foundation.csproj", "3.2.1")]);
 
 		string json = JsonSerializer.Serialize(plan, PlanJsonOptions.Options);
 		ReleasePlan? copy = JsonSerializer.Deserialize<ReleasePlan>(json, PlanJsonOptions.Options);
@@ -31,6 +32,8 @@ public sealed class PlanJsonOptionsTests
 			await Assert.That(copy.Packages[1].Version).IsEqualTo("0.1.0");
 			await Assert.That(copy.TargetCommitSha).IsEqualTo("target-sha");
 			await Assert.That(copy.Configuration).IsEqualTo("Release");
+			await Assert.That(package.DependencyIds).IsEquivalentTo(["Foundation"]);
+			await Assert.That(copy.ReferencedPackages.Single()).IsEqualTo(new ReferencedPackage("Foundation", "src/Foundation/Foundation.csproj", "3.2.1"));
 		}
 	}
 }

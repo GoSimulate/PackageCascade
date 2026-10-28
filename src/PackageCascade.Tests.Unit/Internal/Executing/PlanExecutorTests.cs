@@ -1,9 +1,9 @@
 using PackageCascade.Internal.Executing;
 using PackageCascade.Internal.Executing.Git;
 using PackageCascade.Internal.Executing.Packaging;
-using PackageCascade.Internal.Planning.Git;
+using PackageCascade.Internal.Git;
 using PackageCascade.Public.Executing;
-using PackageCascade.Public.Planning.Definition;
+using PackageCascade.Public.Definition;
 
 namespace PackageCascade.Tests.Unit.Internal.Executing;
 
@@ -11,25 +11,21 @@ public sealed class PlanExecutorTests : IDisposable
 {
 	private readonly string _repositoryPath;
 	private readonly string _outputDirectory;
-	private readonly StubInputResolver _resolver;
 	private readonly StubPackageBuilder _builder;
 	private readonly StubArchiveVerifier _verifier;
 	private readonly StubTagWriter _tags;
-	private readonly StubCommitReader _commits;
-	private readonly ReleasePlan _plan = new([new("A", "src/A.csproj", "1.2.0", [])], "head-sha", "Release");
+	private readonly StubHeadReader _commits;
+	private readonly ReleasePlan _plan = new([new("A", "src/A.csproj", "1.2.0", [], ["B"])], "head-sha", "Release", [new("B", "src/B.csproj", "2.0.0")]);
 
 	public PlanExecutorTests()
 	{
 		_repositoryPath = Path.Combine(Path.GetTempPath(), "packagecascade-executor-tests", Guid.NewGuid().ToString("N"));
 		Directory.CreateDirectory(_repositoryPath);
 		_outputDirectory = Path.Combine(_repositoryPath, "artifacts");
-		_resolver = new StubInputResolver(new(
-			new("Packages.slnx", [Path.Combine(_repositoryPath, "src/A.csproj")], new Dictionary<string, string>(), "Release", false, _outputDirectory),
-			new Dictionary<string, IReadOnlyDictionary<string, string>> { ["A"] = new Dictionary<string, string> { ["B"] = "2.0.0" } }));
 		_builder = new StubPackageBuilder(input => [WriteArchive(input.OutputDirectory)]);
 		_verifier = new StubArchiveVerifier();
 		_tags = new StubTagWriter();
-		_commits = new StubCommitReader();
+		_commits = new StubHeadReader();
 	}
 
 	public void Dispose()
@@ -49,20 +45,16 @@ public sealed class PlanExecutorTests : IDisposable
 	public async Task ForwardsPlanAndOptionsToCollaborators()
 	{
 		using CancellationTokenSource cancellation = new();
-		_resolver.Result = _resolver.Result with
-		{
-			BuildInput = _resolver.Result.BuildInput with { IncludeSymbols = true },
-		};
 		await Execute(new(_outputDirectory, true), cancellation.Token);
 
 		using (Assert.Multiple())
 		{
-			await Assert.That(_resolver.Plan).IsEqualTo(_plan);
-			await Assert.That(_resolver.RepositoryPath).IsEqualTo(_repositoryPath);
-			await Assert.That(_resolver.SolutionPath).IsEqualTo("Packages.slnx");
-			await Assert.That(_resolver.OutputDirectory).IsEqualTo(_outputDirectory);
-			await Assert.That(_resolver.IncludeSymbols).IsTrue();
-			await Assert.That(_builder.Input! with { OutputDirectory = _outputDirectory }).IsEqualTo(_resolver.Result.BuildInput);
+			await Assert.That(_builder.Input!.SolutionPath).IsEqualTo("Packages.slnx");
+			await Assert.That(_builder.Input.ProjectPaths).IsEquivalentTo(new[] { Path.Combine(_repositoryPath, "src/A.csproj") });
+			await Assert.That(_builder.Input.VersionsByProjectPath[Path.Combine(_repositoryPath, "src/A.csproj")]).IsEqualTo("1.2.0");
+			await Assert.That(_builder.Input.VersionsByProjectPath[Path.Combine(_repositoryPath, "src/B.csproj")]).IsEqualTo("2.0.0");
+			await Assert.That(_builder.Input.Configuration).IsEqualTo("Release");
+			await Assert.That(_builder.Input.IncludeSymbols).IsTrue();
 			await Assert.That(_builder.Token).IsEqualTo(cancellation.Token);
 			await Assert.That(_verifier.Archives).IsEquivalentTo(new[] { Path.Combine(_builder.Input!.OutputDirectory, "A.1.2.0.nupkg") });
 			await Assert.That(_verifier.IncludeSymbols).IsTrue();
@@ -103,7 +95,7 @@ public sealed class PlanExecutorTests : IDisposable
 			await Assert.That(result.PackagePaths).IsEmpty();
 			await Assert.That(result.CreatedTags).IsEmpty();
 			await Assert.That(File.ReadAllText(existingFile)).IsEqualTo("keep this file");
-			await Assert.That(_resolver.Plan).IsNotNull();
+			await Assert.That(_commits.ReadCount).IsEqualTo(1);
 			await Assert.That(_builder.Input).IsNull();
 		}
 	}
@@ -111,12 +103,41 @@ public sealed class PlanExecutorTests : IDisposable
 	[Test]
 	public async Task EmptyPlanStillRejectsInvalidInputs()
 	{
-		_resolver.Error = new InvalidOperationException("Invalid plan.");
+		ReleasePlan invalid = _plan with { Packages = [], ReferencedPackages = [new("B", "../outside.csproj", "2.0.0")] };
 
-		InvalidOperationException? error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-			CreateExecutor().Execute(_plan with { Packages = [] }, _repositoryPath, "Packages.slnx", new(_outputDirectory)));
+		await Assert.ThrowsAsync<InvalidOperationException>(() =>
+			CreateExecutor().Execute(invalid, _repositoryPath, "Packages.slnx", new(_outputDirectory)));
+	}
 
-		await Assert.That(ReferenceEquals(error, _resolver.Error)).IsTrue();
+	[Test]
+	public async Task UsesPlannedVersionsForSelectedDependencies()
+	{
+		ReleasePlan plan = _plan with
+		{
+			Packages = [new("B", "src/B.csproj", "2.1.0", [], []), _plan.Packages.Single()],
+			ReferencedPackages = [],
+		};
+
+		await CreateExecutor().Execute(plan, _repositoryPath, "Packages.slnx", new(_outputDirectory));
+
+		using (Assert.Multiple())
+		{
+			await Assert.That(_builder.Input!.ProjectPaths.SequenceEqual([
+				Path.Combine(_repositoryPath, "src/B.csproj"), Path.Combine(_repositoryPath, "src/A.csproj")])).IsTrue();
+			await Assert.That(_builder.Input.VersionsByProjectPath[Path.Combine(_repositoryPath, "src/B.csproj")]).IsEqualTo("2.1.0");
+			await Assert.That(_verifier.Packages.Single(package => package.PackageId == "A").DirectDependencyVersions["B"]).IsEqualTo("2.1.0");
+		}
+	}
+
+	[Test]
+	public async Task RejectsDependencyMissingFromPlanBeforeBuilding()
+	{
+		ReleasePlan plan = _plan with { ReferencedPackages = [] };
+
+		await Assert.ThrowsAsync<InvalidOperationException>(() =>
+			CreateExecutor().Execute(plan, _repositoryPath, "Packages.slnx", new(_outputDirectory)));
+
+		await Assert.That(_builder.Input).IsNull();
 	}
 
 	[Test]
@@ -289,7 +310,7 @@ public sealed class PlanExecutorTests : IDisposable
 	private Task<ExecutionResult> Execute(ExecutionOptions? options = null, CancellationToken token = default)
 		=> CreateExecutor().Execute(_plan, _repositoryPath, "Packages.slnx", options ?? new(_outputDirectory), token);
 
-	private PlanExecutor CreateExecutor() => new(_resolver, _builder, _verifier, _tags, _commits);
+	private PlanExecutor CreateExecutor() => new(_builder, _verifier, _tags, _commits);
 
 	private string WriteArchive(string? directory = null)
 	{
@@ -298,34 +319,6 @@ public sealed class PlanExecutorTests : IDisposable
 		string path = Path.Combine(directory, "A.1.2.0.nupkg");
 		File.WriteAllText(path, "package contents");
 		return path;
-	}
-
-	private sealed class StubInputResolver : IExecutionInputResolver
-	{
-		public StubInputResolver(ResolvedExecutionInput result)
-		{
-			Result = result;
-		}
-		public ResolvedExecutionInput Result { get; set; }
-		public ReleasePlan? Plan { get; private set; }
-		public string? RepositoryPath { get; private set; }
-		public string? SolutionPath { get; private set; }
-		public string? OutputDirectory { get; private set; }
-		public bool IncludeSymbols { get; private set; }
-		public Exception? Error { get; set; }
-		public ResolvedExecutionInput Resolve(ReleasePlan plan, string repositoryPath, string solutionPath, string outputDirectory, bool includeSymbols)
-		{
-			Plan = plan;
-			RepositoryPath = repositoryPath;
-			SolutionPath = solutionPath;
-			OutputDirectory = outputDirectory;
-			IncludeSymbols = includeSymbols;
-			if (Error is not null)
-			{
-				throw Error;
-			}
-			return Result;
-		}
 	}
 
 	private sealed class StubPackageBuilder : IPackageBuilder
@@ -383,14 +376,14 @@ public sealed class PlanExecutorTests : IDisposable
 		}
 	}
 
-	private sealed class StubCommitReader : IGitCommitReader
+	private sealed class StubHeadReader : IRepositoryHeadReader
 	{
 		public string Head { get; set; } = "head-sha";
+		public int ReadCount { get; private set; }
 		public string ReadHeadSha(string repositoryPath)
 		{
+			ReadCount++;
 			return Head;
 		}
-		public IReadOnlyList<GitCommitDetails> ReadSince(string repositoryPath, string baselineCommitHash)
-			=> throw new NotSupportedException("Executing a plan must not read commit history.");
 	}
 }

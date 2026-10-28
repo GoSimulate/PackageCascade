@@ -1,5 +1,5 @@
 using LibGit2Sharp;
-using PackageCascade.Public.Planning.Definition;
+using PackageCascade.Public.Definition;
 
 namespace PackageCascade.Internal.Executing.Git;
 
