@@ -39,6 +39,22 @@ public sealed class PackageTagReaderTests : IDisposable
 	}
 
 	[Test]
+	public async Task MatchesPackageTagsWithoutCaseSensitivity()
+	{
+		Commit commit = Commit("release");
+		_repository.Tags.Add("acme.core-v1.2.0", commit);
+
+		IReadOnlyDictionary<string, PackageReleaseTag> tags = new PackageTagReader()
+			.ReadLatest(_directory, ["Acme.Core", "ACME.CORE"]);
+
+		using (Assert.Multiple())
+		{
+			await Assert.That(tags.Count).IsEqualTo(1);
+			await Assert.That(tags["Acme.Core"].Name).IsEqualTo("acme.core-v1.2.0");
+		}
+	}
+
+	[Test]
 	public async Task IgnoresTagsNotReachableFromHead()
 	{
 		Commit baseline = Commit("baseline");
