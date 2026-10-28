@@ -18,29 +18,36 @@ internal sealed class PackageTagReader
 		Commit head,
 		IEnumerable<string> packageIds)
 	{
-		string[] distinctPackageIds = packageIds.Distinct(StringComparer.Ordinal).ToArray();
-		Dictionary<string, List<PackageReleaseTag>> tagsByPackage = distinctPackageIds
+		Dictionary<string, List<PackageReleaseTag>> tagsByPackage = packageIds.Distinct(StringComparer.Ordinal)
 			.ToDictionary(packageId => packageId, _ => new List<PackageReleaseTag>(), StringComparer.Ordinal);
-
 		foreach (Tag tag in repository.Tags)
 		{
-			foreach (string packageId in distinctPackageIds)
-			{
-				string prefix = packageId + "-v";
-				if (!tag.FriendlyName.StartsWith(prefix, StringComparison.Ordinal)
-					|| !NuGetVersion.TryParseStrict(tag.FriendlyName[prefix.Length..], out NuGetVersion? version))
-				{
-					continue;
-				}
-				if (tag.PeeledTarget is not Commit commit || repository.ObjectDatabase.FindMergeBase(head, commit)?.Id != commit.Id)
-				{
-					continue;
-				}
-
-				tagsByPackage[packageId].Add(new(tag.FriendlyName, version, commit.Sha));
-			}
+			AddReachableMatches(repository, head, tagsByPackage, tag);
 		}
 		return tagsByPackage;
+	}
+
+	private static void AddReachableMatches(
+		Repository repository,
+		Commit head,
+		IReadOnlyDictionary<string, List<PackageReleaseTag>> tagsByPackage,
+		Tag tag)
+	{
+		foreach ((string packageId, List<PackageReleaseTag> tags) in tagsByPackage)
+		{
+			string prefix = packageId + "-v";
+			if (!tag.FriendlyName.StartsWith(prefix, StringComparison.Ordinal)
+				|| !NuGetVersion.TryParseStrict(tag.FriendlyName[prefix.Length..], out NuGetVersion? version))
+			{
+				continue;
+			}
+			if (tag.PeeledTarget is not Commit commit || repository.ObjectDatabase.FindMergeBase(head, commit)?.Id != commit.Id)
+			{
+				continue;
+			}
+
+			tags.Add(new(tag.FriendlyName, version, commit.Sha));
+		}
 	}
 
 	private static Dictionary<string, PackageReleaseTag> GetLatestTags(
@@ -49,30 +56,34 @@ internal sealed class PackageTagReader
 		Dictionary<string, PackageReleaseTag> latestTags = new(StringComparer.Ordinal);
 		foreach ((string packageId, List<PackageReleaseTag> tags) in tagsByPackage)
 		{
-			if (tags.Count == 0)
+			if (tags.Count > 0)
+			{
+				latestTags.Add(packageId, GetLatestTag(packageId, tags));
+			}
+		}
+		return latestTags;
+	}
+
+	private static PackageReleaseTag GetLatestTag(string packageId, IReadOnlyList<PackageReleaseTag> tags)
+	{
+		PackageReleaseTag latest = tags.MaxBy(tag => tag.Version, VersionComparer.VersionRelease)!;
+		foreach (PackageReleaseTag candidate in tags)
+		{
+			if (VersionComparer.VersionRelease.Compare(candidate.Version, latest.Version) != 0)
 			{
 				continue;
 			}
 
-			PackageReleaseTag latest = tags.MaxBy(tag => tag.Version, VersionComparer.VersionRelease)!;
-			foreach (PackageReleaseTag candidate in tags)
+			if (latest.CommitSha != candidate.CommitSha)
 			{
-				if (VersionComparer.VersionRelease.Compare(candidate.Version, latest.Version) == 0)
-				{
-					if (latest.CommitSha != candidate.CommitSha)
-					{
-						throw new InvalidOperationException($"Package '{packageId}' has equivalent version tags on different commits.");
-					}
-
-					if (string.CompareOrdinal(candidate.Name, latest.Name) < 0)
-					{
-						latest = candidate;
-					}
-				}
+				throw new InvalidOperationException($"Package '{packageId}' has equivalent version tags on different commits.");
 			}
-			latestTags.Add(packageId, latest);
-		}
 
-		return latestTags;
+			if (string.CompareOrdinal(candidate.Name, latest.Name) < 0)
+			{
+				latest = candidate;
+			}
+		}
+		return latest;
 	}
 }
