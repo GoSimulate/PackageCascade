@@ -1,0 +1,22 @@
+name: Canonical files
+on:
+  pull_request_target:
+    paths:
+    - .gitattributes
+    - .github/workflows/secret-scan.yml
+    - LICENSE
+    - CONTRIBUTORS.md
+    - .editorconfig
+    - .ort/evaluator.rules.kts
+    - .github/workflows/canonical-file-guard.yml
+permissions:
+  contents: read
+jobs:
+  reject-canonical-file-changes:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+    - name: Explain canonical file ownership
+      run: |
+        echo '::error::Canonical files are managed in https://github.com/GoSimulate/github-infra. Make the change there instead.'
+        exit 1
+...
