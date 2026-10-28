@@ -15,9 +15,9 @@ internal sealed class SolutionPackageDiscoverer : ISolutionPackageDiscoverer
 		}
 	}
 
-	public IReadOnlyList<PackableProject> Discover(string solutionPath)
+	public IReadOnlyList<PackableProject> Discover(string solutionPath, string configuration = "Release")
 	{
-		ProjectGraph graph = new(Path.GetFullPath(solutionPath));
+		ProjectGraph graph = new(Path.GetFullPath(solutionPath), new Dictionary<string, string> { ["Configuration"] = configuration });
 		StringComparer pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 		HashSet<string> packablePaths = graph.EntryPointNodes
 			.Where(IsPackable)

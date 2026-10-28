@@ -25,6 +25,24 @@ public sealed class PlanCommandTests : IDisposable
 			await Assert.That(exitCode).IsEqualTo(0);
 			await Assert.That(planner.RepositoryPath).IsEqualTo(_directory);
 			await Assert.That(planner.SolutionPath).IsEqualTo("Packages.slnx");
+			await Assert.That(planner.Configuration).IsEqualTo("Release");
+		}
+	}
+
+	[Test]
+	[Arguments("Debug")]
+	[Arguments("Staging")]
+	public async Task PlanPassesRequestedConfigurationToPlanner(string configuration)
+	{
+		StubPlanner planner = new();
+		TestBootstrap bootstrap = new(services => services.AddSingleton<IPackageCascadePlanner>(planner));
+
+		int exitCode = await Program.Run(["plan", "Packages.slnx", "--configuration", configuration], bootstrap);
+
+		using (Assert.Multiple())
+		{
+			await Assert.That(exitCode).IsEqualTo(0);
+			await Assert.That(planner.Configuration).IsEqualTo(configuration);
 		}
 	}
 
@@ -50,7 +68,7 @@ public sealed class PlanCommandTests : IDisposable
 		ReleasePlan plan = new(
 			[new PlannedRelease("Fixture", "src/Fixture/Fixture.csproj", "1.2.4",
 				[new ConventionalCommitReason(SemverBump.Patch, ["abc"]),
-					new DependencyReleaseReason("Foundation")])]);
+					new DependencyReleaseReason("Foundation")])], "target-sha", "Release");
 		StubPlanner planner = new(plan);
 		TestBootstrap bootstrap = new(services => services.AddSingleton<IPackageCascadePlanner>(planner));
 		string outputPath = Path.Combine(_directory, "plan.json");
@@ -81,13 +99,15 @@ public sealed class PlanCommandTests : IDisposable
 
 		public string? RepositoryPath { get; private set; }
 		public string? SolutionPath { get; private set; }
+		public string? Configuration { get; private set; }
 
-		public ReleasePlan Generate(string repositoryPath, string solutionPath)
+		public ReleasePlan Generate(string repositoryPath, string solutionPath, string configuration = "Release")
 		{
 			RepositoryPath = repositoryPath;
 			SolutionPath = solutionPath;
+			Configuration = configuration;
 
-			return _plan ?? new([]);
+			return _plan ?? new([], "target-sha", configuration);
 		}
 	}
 }

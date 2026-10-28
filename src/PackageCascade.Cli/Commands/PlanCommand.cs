@@ -27,16 +27,23 @@ public sealed class PlanCommand : Command
 			Description = "Write the plan to a file instead of standard output",
 		};
 
+		Option<string> configuration = new("--configuration")
+		{
+			Description = "MSBuild configuration used to discover projects and dependencies",
+			DefaultValueFactory = _ => "Release",
+		};
+
 		Arguments.Add(solution);
 		Options.Add(repository);
 		Options.Add(outFile);
+		Options.Add(configuration);
 
 		SetAction(parseResult =>
 		{
 			string solutionPath = parseResult.GetRequiredValue(solution);
 			string repositoryPath = parseResult.GetValue(repository) ?? Directory.GetCurrentDirectory();
 
-			ReleasePlan plan = planner.Generate(repositoryPath, solutionPath);
+			ReleasePlan plan = planner.Generate(repositoryPath, solutionPath, parseResult.GetValue(configuration)!);
 			string json = JsonSerializer.Serialize(plan, PlanJsonOptions.Options);
 
 			string? outputPath = parseResult.GetValue(outFile);

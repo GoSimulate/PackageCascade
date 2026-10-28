@@ -93,6 +93,23 @@ public class SolutionPackageDiscovererTests : IDisposable
 		await Assert.That(packages.Any(package => package.ProjectPath == _outsideProject)).IsFalse();
 	}
 
+	[Test]
+	public async Task EvaluatesPackabilityUsingRequestedConfiguration()
+	{
+		string conditionalProject = WriteProject("Conditional",
+			"<IsPackable Condition=\"'$(Configuration)' == 'Debug'\">false</IsPackable>");
+		File.WriteAllText(_solutionPath, "<Solution><Project Path=\"Default/Default.csproj\" /><Project Path=\"Conditional/Conditional.csproj\" /></Solution>");
+
+		IReadOnlyList<PackableProject> releasePackages = new SolutionPackageDiscoverer().Discover(_solutionPath, "Release");
+		IReadOnlyList<PackableProject> debugPackages = new SolutionPackageDiscoverer().Discover(_solutionPath, "Debug");
+
+		using (Assert.Multiple())
+		{
+			await Assert.That(releasePackages.Any(package => package.ProjectPath == conditionalProject)).IsTrue();
+			await Assert.That(debugPackages.Any(package => package.ProjectPath == conditionalProject)).IsFalse();
+		}
+	}
+
 	public void Dispose()
 	{
 		Directory.Delete(_directory, recursive: true);

@@ -14,7 +14,7 @@ public sealed class PlanJsonOptionsTests
 				[new ConventionalCommitReason(SemverBump.Minor, ["abc"]),
 					new DependencyReleaseReason("Foundation")]),
 				new PlannedRelease("NewPackage", "src/NewPackage/NewPackage.csproj", "0.1.0",
-					[new InitialReleaseReason()])]);
+					[new InitialReleaseReason()])], "target-sha", "Release");
 
 		string json = JsonSerializer.Serialize(plan, PlanJsonOptions.Options);
 		ReleasePlan? copy = JsonSerializer.Deserialize<ReleasePlan>(json, PlanJsonOptions.Options);
@@ -29,6 +29,8 @@ public sealed class PlanJsonOptionsTests
 			await Assert.That(package.PackageId).IsEqualTo("Fixture");
 			await Assert.That(copy.Packages[1].Reasons.Single() is InitialReleaseReason).IsTrue();
 			await Assert.That(copy.Packages[1].Version).IsEqualTo("0.1.0");
+			await Assert.That(copy.TargetCommitSha).IsEqualTo("target-sha");
+			await Assert.That(copy.Configuration).IsEqualTo("Release");
 		}
 	}
 }
