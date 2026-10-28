@@ -57,7 +57,9 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 			repositoryPath, layers, selected, graph, tags, directChanges, versions);
 
 		IReadOnlyList<ReferencedPackage> referencedPackages = GetReferencedPackages(repositoryPath, selected, graph, tags);
-		return new(packages, _headReader.ReadHeadSha(repositoryPath), configuration, referencedPackages);
+		string workingDirectory = Path.GetRelativePath(repositoryPath, Path.GetDirectoryName(Path.GetFullPath(solutionPath))!)
+			.Replace('\\', '/');
+		return new(packages, _headReader.ReadHeadSha(repositoryPath), configuration, referencedPackages, workingDirectory);
 	}
 
 	private static IReadOnlyList<ReferencedPackage> GetReferencedPackages(

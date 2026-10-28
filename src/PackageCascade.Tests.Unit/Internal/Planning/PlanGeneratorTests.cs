@@ -291,6 +291,17 @@ public sealed class PlanGeneratorTests
 		}
 	}
 
+	[Test]
+	public async Task RecordsSolutionDirectoryRelativeToRepository()
+	{
+		PlanGenerator generator = CreateGenerator(Graph(), new StubCommitReader([]), Tags());
+		string solutionPath = Path.Combine(_repositoryPath, "solutions", "nested", "Packages.slnx");
+
+		ReleasePlan plan = generator.Generate(_repositoryPath, solutionPath);
+
+		await Assert.That(plan.WorkingDirectory).IsEqualTo("solutions/nested");
+	}
+
 	private static ReleasePlan Generate(IReadOnlyList<PackableProject> projects,
 		IReadOnlyDictionary<string, PackageReleaseTag> tags, IReadOnlyList<GitCommitDetails>? commits = null)
 	{

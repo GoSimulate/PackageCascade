@@ -1,7 +1,7 @@
 namespace PackageCascade.Internal.Executing.Packaging;
 
 internal sealed record PackageBuildInput(
-	string SolutionPath,
+	string WorkingDirectory,
 	IReadOnlyList<string> ProjectPaths,
 	IReadOnlyDictionary<string, string> VersionsByProjectPath,
 	string Configuration,

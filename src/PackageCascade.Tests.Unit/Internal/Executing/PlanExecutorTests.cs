@@ -15,7 +15,7 @@ public sealed class PlanExecutorTests : IDisposable
 	private readonly StubArchiveVerifier _verifier;
 	private readonly StubTagWriter _tags;
 	private readonly StubHeadReader _commits;
-	private readonly ReleasePlan _plan = new([new("A", "src/A.csproj", "1.2.0", [], ["B"])], "head-sha", "Release", [new("B", "src/B.csproj", "2.0.0")]);
+	private readonly ReleasePlan _plan = new([new("A", "src/A.csproj", "1.2.0", [], ["B"])], "head-sha", "Release", [new("B", "src/B.csproj", "2.0.0")], ".");
 
 	public PlanExecutorTests()
 	{
@@ -49,7 +49,7 @@ public sealed class PlanExecutorTests : IDisposable
 
 		using (Assert.Multiple())
 		{
-			await Assert.That(_builder.Input!.SolutionPath).IsEqualTo("Packages.slnx");
+			await Assert.That(_builder.Input!.WorkingDirectory).IsEqualTo(_repositoryPath);
 			await Assert.That(_builder.Input.ProjectPaths).IsEquivalentTo(new[] { Path.Combine(_repositoryPath, "src/A.csproj") });
 			await Assert.That(_builder.Input.VersionsByProjectPath[Path.Combine(_repositoryPath, "src/A.csproj")]).IsEqualTo("1.2.0");
 			await Assert.That(_builder.Input.VersionsByProjectPath[Path.Combine(_repositoryPath, "src/B.csproj")]).IsEqualTo("2.0.0");
@@ -88,7 +88,7 @@ public sealed class PlanExecutorTests : IDisposable
 		string existingFile = Path.Combine(_outputDirectory, "existing.txt");
 		File.WriteAllText(existingFile, "keep this file");
 
-		ExecutionResult result = await CreateExecutor().Execute(_plan with { Packages = [] }, _repositoryPath, "Packages.slnx", new(_outputDirectory));
+		ExecutionResult result = await CreateExecutor().Execute(_plan with { Packages = [] }, _repositoryPath, new(_outputDirectory));
 
 		using (Assert.Multiple())
 		{
@@ -106,7 +106,7 @@ public sealed class PlanExecutorTests : IDisposable
 		ReleasePlan invalid = _plan with { Packages = [], ReferencedPackages = [new("B", "../outside.csproj", "2.0.0")] };
 
 		await Assert.ThrowsAsync<InvalidOperationException>(() =>
-			CreateExecutor().Execute(invalid, _repositoryPath, "Packages.slnx", new(_outputDirectory)));
+			CreateExecutor().Execute(invalid, _repositoryPath, new(_outputDirectory)));
 	}
 
 	[Test]
@@ -118,7 +118,7 @@ public sealed class PlanExecutorTests : IDisposable
 			ReferencedPackages = [],
 		};
 
-		await CreateExecutor().Execute(plan, _repositoryPath, "Packages.slnx", new(_outputDirectory));
+		await CreateExecutor().Execute(plan, _repositoryPath, new(_outputDirectory));
 
 		using (Assert.Multiple())
 		{
@@ -130,12 +130,22 @@ public sealed class PlanExecutorTests : IDisposable
 	}
 
 	[Test]
+	public async Task UsesWorkingDirectoryFromPlan()
+	{
+		ReleasePlan plan = _plan with { WorkingDirectory = "solutions/nested" };
+
+		await CreateExecutor().Execute(plan, _repositoryPath, new(_outputDirectory));
+
+		await Assert.That(_builder.Input!.WorkingDirectory).IsEqualTo(Path.Combine(_repositoryPath, "solutions", "nested"));
+	}
+
+	[Test]
 	public async Task RejectsDependencyMissingFromPlanBeforeBuilding()
 	{
 		ReleasePlan plan = _plan with { ReferencedPackages = [] };
 
 		await Assert.ThrowsAsync<InvalidOperationException>(() =>
-			CreateExecutor().Execute(plan, _repositoryPath, "Packages.slnx", new(_outputDirectory)));
+			CreateExecutor().Execute(plan, _repositoryPath, new(_outputDirectory)));
 
 		await Assert.That(_builder.Input).IsNull();
 	}
@@ -308,7 +318,7 @@ public sealed class PlanExecutorTests : IDisposable
 	}
 
 	private Task<ExecutionResult> Execute(ExecutionOptions? options = null, CancellationToken token = default)
-		=> CreateExecutor().Execute(_plan, _repositoryPath, "Packages.slnx", options ?? new(_outputDirectory), token);
+		=> CreateExecutor().Execute(_plan, _repositoryPath, options ?? new(_outputDirectory), token);
 
 	private PlanExecutor CreateExecutor() => new(_builder, _verifier, _tags, _commits);
 

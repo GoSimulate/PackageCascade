@@ -105,5 +105,5 @@ public sealed class PackageTagWriterTests : IDisposable
 	}
 
 	private static ReleasePlan Plan(Commit target, params (string PackageId, string Version)[] packages)
-		=> new(packages.Select(package => new PlannedRelease(package.PackageId, $"{package.PackageId}.csproj", package.Version, [], [])).ToArray(), target.Sha, "Release", []);
+		=> new(packages.Select(package => new PlannedRelease(package.PackageId, $"{package.PackageId}.csproj", package.Version, [], [])).ToArray(), target.Sha, "Release", [], ".");
 }

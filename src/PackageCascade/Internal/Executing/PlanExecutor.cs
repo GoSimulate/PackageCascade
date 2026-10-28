@@ -29,7 +29,6 @@ internal sealed class PlanExecutor : IPackageCascadeExecutor
 	public async Task<ExecutionResult> Execute(
 		ReleasePlan plan,
 		string repositoryPath,
-		string solutionPath,
 		ExecutionOptions options,
 		CancellationToken cancellationToken = default)
 	{
@@ -41,7 +40,7 @@ internal sealed class PlanExecutor : IPackageCascadeExecutor
 			throw new InvalidOperationException("The release plan targets a different HEAD commit.");
 		}
 
-		PackageBuildInput buildInput = CreateBuildInput(plan, repositoryRoot, solutionPath, output.OutputPath, options.IncludeSymbols);
+		PackageBuildInput buildInput = CreateBuildInput(plan, repositoryRoot, output.OutputPath, options.IncludeSymbols);
 		ExpectedPackage[] expected = CreateExpectedPackages(plan);
 		if (plan.Packages.Count == 0)
 		{
@@ -71,7 +70,7 @@ internal sealed class PlanExecutor : IPackageCascadeExecutor
 		}
 	}
 
-	private static PackageBuildInput CreateBuildInput(ReleasePlan plan, string repositoryRoot, string solutionPath,
+	private static PackageBuildInput CreateBuildInput(ReleasePlan plan, string repositoryRoot,
 		string outputDirectory, bool includeSymbols)
 	{
 		Dictionary<string, string> versionsByPath = new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
@@ -83,7 +82,7 @@ internal sealed class PlanExecutor : IPackageCascadeExecutor
 			versionsByPath.Add(ResolveProjectPath(repositoryRoot, projectPath), version);
 		}
 
-		return new(solutionPath,
+		return new(Path.GetFullPath(Path.Combine(repositoryRoot, plan.WorkingDirectory)),
 			plan.Packages.Select(package => ResolveProjectPath(repositoryRoot, package.ProjectPath)).ToArray(),
 			versionsByPath, plan.Configuration, includeSymbols, outputDirectory);
 	}

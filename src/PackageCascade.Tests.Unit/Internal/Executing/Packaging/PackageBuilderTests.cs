@@ -69,6 +69,20 @@ public sealed class PackageBuilderTests : IDisposable
 	}
 
 	[Test]
+	public async Task SelectsSdkFromSuppliedWorkingDirectory()
+	{
+		string nestedDirectory = Directory.CreateDirectory(Path.Combine(_directory, "nested")).FullName;
+		File.WriteAllText(Path.Combine(nestedDirectory, "global.json"), """
+			{"sdk":{"version":"99.0.100","rollForward":"disable"}}
+			""");
+
+		InvalidOperationException? error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+			new PackageBuilder().Build(Input([_projectA]) with { WorkingDirectory = nestedDirectory }, CancellationToken.None));
+
+		await Assert.That(error!.Message).Contains("99.0.100");
+	}
+
+	[Test]
 	public async Task IgnoresUnrelatedSolutionProjects()
 	{
 		string unrelated = WriteProject("Unrelated", "<TargetFramework>net11.0</TargetFramework>",
@@ -242,7 +256,7 @@ public sealed class PackageBuilderTests : IDisposable
 
 	private PackageBuildInput Input(IReadOnlyList<string> selectedProjects, bool includeSymbols = false)
 	{
-		return new(_solutionPath, selectedProjects, new Dictionary<string, string>
+		return new(_directory, selectedProjects, new Dictionary<string, string>
 		{
 			[_projectA] = "2.3.4",
 			[_projectB] = "3.4.5",
