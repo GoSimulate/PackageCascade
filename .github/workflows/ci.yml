@@ -78,5 +78,5 @@ jobs:
       - name: Publish CLI
         run: dotnet publish src/PackageCascade.Cli/PackageCascade.Cli.csproj -c Release -r ${{ matrix.rid }} --self-contained true -o artifacts/cli -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=embedded
       - name: Run CLI help
-        shell: pwsh
+        shell: bash
         run: ./artifacts/cli/${{ matrix.binary }} --help

@@ -28,7 +28,7 @@ runs:
   using: composite
   steps:
     - id: run
-      shell: pwsh
+      shell: bash
       env:
         PACKAGECASCADE_VERSION: ${{ inputs.version }}
         PACKAGECASCADE_PLAN_PATH: ${{ inputs.plan-path }}
@@ -37,32 +37,42 @@ runs:
         PACKAGECASCADE_INCLUDE_SYMBOLS: ${{ inputs.include-symbols }}
         PACKAGECASCADE_RELEASE_URL: https://github.com/GoSimulate/PackageCascade/releases/download
       run: |
-        $ErrorActionPreference = 'Stop'
-        $asset = switch ("$env:RUNNER_OS/$env:RUNNER_ARCH") {
-          'Linux/X64' { 'PackageCascade-linux-x64' }
-          'Windows/X64' { 'PackageCascade-win-x64.exe' }
-          'macOS/X64' { 'PackageCascade-osx-x64' }
-          'macOS/ARM64' { 'PackageCascade-osx-arm64' }
-          default { throw "PackageCascade has no release asset for $env:RUNNER_OS/$env:RUNNER_ARCH." }
-        }
+        set -euo pipefail
+        case "$RUNNER_OS/$RUNNER_ARCH" in
+          Linux/X64) asset=PackageCascade-linux-x64 ;;
+          Windows/X64) asset=PackageCascade-win-x64.exe ;;
+          macOS/X64) asset=PackageCascade-osx-x64 ;;
+          macOS/ARM64) asset=PackageCascade-osx-arm64 ;;
+          *) echo "No PackageCascade release asset for $RUNNER_OS/$RUNNER_ARCH" >&2; exit 1 ;;
+        esac
 
-        $downloadDirectory = Join-Path $env:RUNNER_TEMP ([guid]::NewGuid().ToString('N'))
-        New-Item -ItemType Directory -Path $downloadDirectory | Out-Null
-        $executable = Join-Path $downloadDirectory $asset
-        $tag = [uri]::EscapeDataString($env:PACKAGECASCADE_VERSION)
-        $url = "$env:PACKAGECASCADE_RELEASE_URL/$tag/$asset"
-        Invoke-WebRequest -Uri $url -OutFile $executable
-        if ($env:RUNNER_OS -ne 'Windows') { & chmod +x $executable }
+        temp_root="$RUNNER_TEMP"
+        output_file="$GITHUB_OUTPUT"
+        if [[ "$RUNNER_OS" == Windows ]]; then
+          temp_root="$(cygpath -u "$temp_root")"
+          output_file="$(cygpath -u "$output_file")"
+        fi
 
-        $resultPath = Join-Path $downloadDirectory 'packagecascade-apply-result.json'
-        $cliArguments = @('apply', '--infile', $env:PACKAGECASCADE_PLAN_PATH, '--output', $env:PACKAGECASCADE_OUTPUT_DIRECTORY)
-        if ($env:PACKAGECASCADE_REPOSITORY) { $cliArguments += @('--repository', $env:PACKAGECASCADE_REPOSITORY) }
-        switch ($env:PACKAGECASCADE_INCLUDE_SYMBOLS.ToLowerInvariant()) {
-          'true' { $cliArguments += '--include-symbols' }
-          'false' { }
-          default { throw "include-symbols must be 'true' or 'false'." }
-        }
-        & $executable @cliArguments > $resultPath
-        if ($LASTEXITCODE -ne 0) { throw "PackageCascade apply failed with exit code $LASTEXITCODE." }
-        if (-not (Test-Path -LiteralPath $resultPath -PathType Leaf)) { throw 'PackageCascade did not create an apply result.' }
-        "result-path=$resultPath" >> $env:GITHUB_OUTPUT
+        download_dir="$(mktemp -d "$temp_root/packagecascade.XXXXXXXX")"
+        executable="$download_dir/$asset"
+        curl --fail --location --silent --show-error \
+          "$PACKAGECASCADE_RELEASE_URL/$PACKAGECASCADE_VERSION/$asset" --output "$executable"
+        chmod +x "$executable"
+
+        result_path="$download_dir/packagecascade-apply-result.json"
+        arguments=(apply --infile "$PACKAGECASCADE_PLAN_PATH" --output "$PACKAGECASCADE_OUTPUT_DIRECTORY")
+        if [[ -n "$PACKAGECASCADE_REPOSITORY" ]]; then
+          arguments+=(--repository "$PACKAGECASCADE_REPOSITORY")
+        fi
+        case "$PACKAGECASCADE_INCLUDE_SYMBOLS" in
+          true) arguments+=(--include-symbols) ;;
+          false) ;;
+          *) echo 'include-symbols must be true or false' >&2; exit 1 ;;
+        esac
+        "$executable" "${arguments[@]}" > "$result_path"
+        test -s "$result_path"
+
+        if [[ "$RUNNER_OS" == Windows ]]; then
+          result_path="$(cygpath -w "$result_path")"
+        fi
+        printf 'result-path=%s\n' "$result_path" >> "$output_file"
