@@ -11,7 +11,7 @@ PackageCascade is a .NET tool for planning releases in solutions containing mult
 > [!WARNING]
 > We developed this library for our own internal use and are sharing it because we believe it may be useful to the wider developer community. Issues and pull requests are welcome, but we make no support commitments or warranties, and we cannot guarantee that we will respond to issues or review or merge pull requests.
 
-The `plan` command is read-only. It writes the release plan to standard output as JSON, or to a file when given `--outfile`. Execution is separate: callers can use the plan themselves, and dedicated execution commands are planned.
+The `plan` command is read-only. It writes the release plan to standard output as JSON, or to a file when given `--outfile`. Callers can execute the plan themselves or use `apply --output <directory>`, which reads a plan from standard input or `--infile <path>`, builds and verifies its packages, and creates local Git tags. Use `--include-symbols` to include symbol packages. `apply` writes its result as JSON and does not publish packages or push tags.
 
 ## Work locally
 
