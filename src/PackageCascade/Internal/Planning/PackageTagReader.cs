@@ -9,6 +9,15 @@ internal sealed class PackageTagReader
 	{
 		using Repository repository = new(repositoryPath);
 		Commit head = repository.Head.Tip ?? throw new InvalidOperationException("The repository has no HEAD commit.");
+		Dictionary<string, List<PackageReleaseTag>> tagsByPackage = GetReachableTags(repository, head, packageIds);
+		return GetLatestTags(tagsByPackage);
+	}
+
+	private static Dictionary<string, List<PackageReleaseTag>> GetReachableTags(
+		Repository repository,
+		Commit head,
+		IEnumerable<string> packageIds)
+	{
 		string[] distinctPackageIds = packageIds.Distinct(StringComparer.Ordinal).ToArray();
 		Dictionary<string, List<PackageReleaseTag>> tagsByPackage = distinctPackageIds
 			.ToDictionary(packageId => packageId, _ => new List<PackageReleaseTag>(), StringComparer.Ordinal);
@@ -31,7 +40,12 @@ internal sealed class PackageTagReader
 				tagsByPackage[packageId].Add(new(tag.FriendlyName, version, commit.Sha));
 			}
 		}
+		return tagsByPackage;
+	}
 
+	private static Dictionary<string, PackageReleaseTag> GetLatestTags(
+		IReadOnlyDictionary<string, List<PackageReleaseTag>> tagsByPackage)
+	{
 		Dictionary<string, PackageReleaseTag> latestTags = new(StringComparer.Ordinal);
 		foreach ((string packageId, List<PackageReleaseTag> tags) in tagsByPackage)
 		{
