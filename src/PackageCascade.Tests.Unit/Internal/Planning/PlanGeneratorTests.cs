@@ -19,11 +19,11 @@ public sealed class PlanGeneratorTests
 	{
 		ReleasePlan plan = Generate(Graph(), new Dictionary<string, PackageReleaseTag>());
 
-		await Assert.That(plan.Packages.Select(package => package.PackageId)).IsEquivalentTo(new[] { "A", "B", "C", "D", "Unrelated" });
-
-		foreach (PlannedRelease package in plan.Packages)
+		using (Assert.Multiple())
 		{
-			using (Assert.Multiple())
+			await Assert.That(plan.Packages.Select(package => package.PackageId)).IsEquivalentTo(new[] { "A", "B", "C", "D", "Unrelated" });
+
+			foreach (PlannedRelease package in plan.Packages)
 			{
 				await Assert.That(package.Version).IsEqualTo("0.1.0");
 				await Assert.That(package.Reasons.Count(reason => reason is InitialReleaseReason)).IsEqualTo(1);
@@ -37,8 +37,11 @@ public sealed class PlanGeneratorTests
 		ReleasePlan plan = Generate([Project("New")], new Dictionary<string, PackageReleaseTag>(),
 			[Commit("breaking", "feat!: introduce API", "src/New/Api.cs")]);
 
-		await Assert.That(plan.Packages.Single().Version).IsEqualTo("0.1.0");
-		await Assert.That(plan.Packages.Single().Reasons.Count(reason => reason is InitialReleaseReason)).IsEqualTo(1);
+		using (Assert.Multiple())
+		{
+			await Assert.That(plan.Packages.Single().Version).IsEqualTo("0.1.0");
+			await Assert.That(plan.Packages.Single().Reasons.Count(reason => reason is InitialReleaseReason)).IsEqualTo(1);
+		}
 	}
 
 	[Test]
@@ -49,9 +52,12 @@ public sealed class PlanGeneratorTests
 
 		ReleasePlan plan = Generate(Graph(), tags);
 
-		await AssertVersions(plan, ("A", "1.2.4"), ("B", "2.3.5"), ("C", "0.1.0"), ("D", "4.5.7"));
-		await Assert.That(Release(plan, "C").Reasons.Count(reason => reason is InitialReleaseReason)).IsEqualTo(1);
-		await AssertDependencyReason(plan, "B", "C");
+		using (Assert.Multiple())
+		{
+			await AssertVersions(plan, ("A", "1.2.4"), ("B", "2.3.5"), ("C", "0.1.0"), ("D", "4.5.7"));
+			await Assert.That(Release(plan, "C").Reasons.Count(reason => reason is InitialReleaseReason)).IsEqualTo(1);
+			await AssertDependencyReason(plan, "B", "C");
+		}
 	}
 
 	[Test]
@@ -59,12 +65,15 @@ public sealed class PlanGeneratorTests
 	{
 		ReleasePlan plan = Generate(Graph(), Tags(), [Commit("fix-c", "fix: repair C", "src/C/Api.cs")]);
 
-		await AssertVersions(plan, ("A", "1.2.4"), ("B", "2.3.5"), ("C", "3.4.6"), ("D", "4.5.7"));
-		await AssertCommitReason(plan, "C", SemverBump.Patch, "fix-c");
-		await AssertDependencyReason(plan, "A", "B");
-		await AssertDependencyReason(plan, "B", "C");
-		await AssertDependencyReason(plan, "D", "C");
-		await Assert.That(string.Join(",", plan.Packages.Select(package => package.PackageId))).IsEqualTo("C,B,D,A");
+		using (Assert.Multiple())
+		{
+			await AssertVersions(plan, ("A", "1.2.4"), ("B", "2.3.5"), ("C", "3.4.6"), ("D", "4.5.7"));
+			await AssertCommitReason(plan, "C", SemverBump.Patch, "fix-c");
+			await AssertDependencyReason(plan, "A", "B");
+			await AssertDependencyReason(plan, "B", "C");
+			await AssertDependencyReason(plan, "D", "C");
+			await Assert.That(string.Join(",", plan.Packages.Select(package => package.PackageId))).IsEqualTo("C,B,D,A");
+		}
 	}
 
 	[Test]
@@ -72,10 +81,13 @@ public sealed class PlanGeneratorTests
 	{
 		ReleasePlan plan = Generate(Graph(), Tags(), [Commit("feat-b", "feat: extend B", "src/B/Api.cs")]);
 
-		await AssertVersions(plan, ("A", "1.2.4"), ("B", "2.4.0"));
-		await AssertCommitReason(plan, "B", SemverBump.Minor, "feat-b");
-		await AssertDependencyReason(plan, "A", "B");
-		await Assert.That(string.Join(",", plan.Packages.Select(package => package.PackageId))).IsEqualTo("B,A");
+		using (Assert.Multiple())
+		{
+			await AssertVersions(plan, ("A", "1.2.4"), ("B", "2.4.0"));
+			await AssertCommitReason(plan, "B", SemverBump.Minor, "feat-b");
+			await AssertDependencyReason(plan, "A", "B");
+			await Assert.That(string.Join(",", plan.Packages.Select(package => package.PackageId))).IsEqualTo("B,A");
+		}
 	}
 
 	[Test]
@@ -83,8 +95,11 @@ public sealed class PlanGeneratorTests
 	{
 		ReleasePlan plan = Generate(Graph(), Tags(), [Commit("fix-a", "fix: repair A", "src/A/Api.cs")]);
 
-		await AssertVersions(plan, ("A", "1.2.4"));
-		await Assert.That(plan.Packages.Single().PackageId).IsEqualTo("A");
+		using (Assert.Multiple())
+		{
+			await AssertVersions(plan, ("A", "1.2.4"));
+			await Assert.That(plan.Packages.Single().PackageId).IsEqualTo("A");
+		}
 	}
 
 	[Test]
@@ -92,8 +107,11 @@ public sealed class PlanGeneratorTests
 	{
 		ReleasePlan plan = Generate(Graph(), Tags(), [Commit("break-c", "feat!: replace C API", "src/C/Api.cs")]);
 
-		await AssertVersions(plan, ("A", "1.2.4"), ("B", "2.3.5"), ("C", "4.0.0"), ("D", "4.5.7"));
-		await AssertCommitReason(plan, "C", SemverBump.Major, "break-c");
+		using (Assert.Multiple())
+		{
+			await AssertVersions(plan, ("A", "1.2.4"), ("B", "2.3.5"), ("C", "4.0.0"), ("D", "4.5.7"));
+			await AssertCommitReason(plan, "C", SemverBump.Major, "break-c");
+		}
 	}
 
 	[Test]
@@ -102,9 +120,12 @@ public sealed class PlanGeneratorTests
 		ReleasePlan plan = Generate(Graph(), Tags(),
 			[Commit("feat-b", "feat: extend B", "src/B/Api.cs"), Commit("fix-c", "fix: repair C", "src/C/Api.cs")]);
 
-		await AssertVersions(plan, ("A", "1.2.4"), ("B", "2.4.0"), ("C", "3.4.6"), ("D", "4.5.7"));
-		await AssertCommitReason(plan, "B", SemverBump.Minor, "feat-b");
-		await AssertDependencyReason(plan, "B", "C");
+		using (Assert.Multiple())
+		{
+			await AssertVersions(plan, ("A", "1.2.4"), ("B", "2.4.0"), ("C", "3.4.6"), ("D", "4.5.7"));
+			await AssertCommitReason(plan, "B", SemverBump.Minor, "feat-b");
+			await AssertDependencyReason(plan, "B", "C");
+		}
 	}
 
 	[Test]
@@ -120,9 +141,12 @@ public sealed class PlanGeneratorTests
 		ReleasePlan first = Generate(Graph(), Tags(), commits);
 		ReleasePlan reversed = Generate(Graph(), Tags(), commits.Reverse().ToArray());
 
-		await AssertVersions(first, ("A", "1.2.4"), ("B", "3.0.0"));
-		await AssertVersions(reversed, ("A", "1.2.4"), ("B", "3.0.0"));
-		await AssertCommitReason(first, "B", SemverBump.Major, "break-b");
+		using (Assert.Multiple())
+		{
+			await AssertVersions(first, ("A", "1.2.4"), ("B", "3.0.0"));
+			await AssertVersions(reversed, ("A", "1.2.4"), ("B", "3.0.0"));
+			await AssertCommitReason(first, "B", SemverBump.Major, "break-b");
+		}
 	}
 
 	[Test]
@@ -145,8 +169,11 @@ public sealed class PlanGeneratorTests
 
 		ReleasePlan plan = generator.Generate(_repositoryPath, _solutionPath);
 
-		await AssertVersions(plan, ("Older", "1.1.0"));
-		await AssertCommitReason(plan, "Older", SemverBump.Minor, "older-feature");
+		using (Assert.Multiple())
+		{
+			await AssertVersions(plan, ("Older", "1.1.0"));
+			await AssertCommitReason(plan, "Older", SemverBump.Minor, "older-feature");
+		}
 	}
 
 	[Test]
@@ -227,11 +254,14 @@ public sealed class PlanGeneratorTests
 
 	private static async Task AssertVersions(ReleasePlan plan, params (string PackageId, string Version)[] expected)
 	{
-		await Assert.That(plan.Packages.Select(package => package.PackageId)).IsEquivalentTo(expected.Select(package => package.PackageId));
-
-		foreach ((string packageId, string version) in expected)
+		using (Assert.Multiple())
 		{
-			await Assert.That(Release(plan, packageId).Version).IsEqualTo(version);
+			await Assert.That(plan.Packages.Select(package => package.PackageId)).IsEquivalentTo(expected.Select(package => package.PackageId));
+
+			foreach ((string packageId, string version) in expected)
+			{
+				await Assert.That(Release(plan, packageId).Version).IsEqualTo(version);
+			}
 		}
 	}
 
@@ -264,14 +294,22 @@ public sealed class PlanGeneratorTests
 		["Unrelated"] = Tag("Unrelated", "5.0.0", "release-unrelated"),
 	};
 
-	private sealed class StubDiscoverer(IReadOnlyList<PackableProject> projects) : ISolutionPackageDiscoverer
+	private sealed class StubDiscoverer : ISolutionPackageDiscoverer
 	{
-		public IReadOnlyList<PackableProject> Discover(string solutionPath) => projects;
+		private readonly IReadOnlyList<PackableProject> _projects;
+
+		public StubDiscoverer(IReadOnlyList<PackableProject> projects) => _projects = projects;
+
+		public IReadOnlyList<PackableProject> Discover(string solutionPath) => _projects;
 	}
 
-	private sealed class StubTagReader(IReadOnlyDictionary<string, PackageReleaseTag> tags) : IPackageTagReader
+	private sealed class StubTagReader : IPackageTagReader
 	{
-		public IReadOnlyDictionary<string, PackageReleaseTag> ReadLatest(string repositoryPath, IEnumerable<string> packageIds) => tags;
+		private readonly IReadOnlyDictionary<string, PackageReleaseTag> _tags;
+
+		public StubTagReader(IReadOnlyDictionary<string, PackageReleaseTag> tags) => _tags = tags;
+
+		public IReadOnlyDictionary<string, PackageReleaseTag> ReadLatest(string repositoryPath, IEnumerable<string> packageIds) => _tags;
 	}
 
 	private sealed class StubCommitReader : IGitCommitReader

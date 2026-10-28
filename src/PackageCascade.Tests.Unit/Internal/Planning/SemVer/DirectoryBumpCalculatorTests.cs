@@ -78,8 +78,11 @@ public class DirectoryBumpCalculatorTests
 
 		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate(commits, ["src/A", "src/B", "src/C"]);
 
-		await Assert.That(bumps["src/A"]).IsEqualTo(SemverBump.Minor);
-		await Assert.That(bumps["src/B"]).IsEqualTo(SemverBump.Patch);
-		await Assert.That(bumps["src/C"]).IsEqualTo(SemverBump.None);
+		using (Assert.Multiple())
+		{
+			await Assert.That(bumps["src/A"]).IsEqualTo(SemverBump.Minor);
+			await Assert.That(bumps["src/B"]).IsEqualTo(SemverBump.Patch);
+			await Assert.That(bumps["src/C"]).IsEqualTo(SemverBump.None);
+		}
 	}
 }
