@@ -1,0 +1,71 @@
+name: PackageCascade plan
+description: Download a pinned PackageCascade release and create a release plan
+
+inputs:
+  version:
+    description: PackageCascade release tag (for example, v1.2.3)
+    required: true
+  solution:
+    description: Path to the solution file
+    required: true
+  repository:
+    description: Path to the Git repository (defaults to the working directory)
+    required: false
+  configuration:
+    description: MSBuild configuration (defaults to Release)
+    required: false
+
+outputs:
+  plan-path:
+    description: Absolute path to the generated plan JSON
+    value: ${{ steps.run.outputs.plan-path }}
+
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      env:
+        PACKAGECASCADE_VERSION: ${{ inputs.version }}
+        PACKAGECASCADE_SOLUTION: ${{ inputs.solution }}
+        PACKAGECASCADE_REPOSITORY: ${{ inputs.repository }}
+        PACKAGECASCADE_CONFIGURATION: ${{ inputs.configuration }}
+        PACKAGECASCADE_RELEASE_URL: https://github.com/GoSimulate/PackageCascade/releases/download
+      run: |
+        set -euo pipefail
+        case "$RUNNER_OS/$RUNNER_ARCH" in
+          Linux/X64) asset=PackageCascade-linux-x64 ;;
+          Windows/X64) asset=PackageCascade-win-x64.exe ;;
+          macOS/X64) asset=PackageCascade-osx-x64 ;;
+          macOS/ARM64) asset=PackageCascade-osx-arm64 ;;
+          *) echo "No PackageCascade release asset for $RUNNER_OS/$RUNNER_ARCH" >&2; exit 1 ;;
+        esac
+
+        temp_root="$RUNNER_TEMP"
+        output_file="$GITHUB_OUTPUT"
+        if [[ "$RUNNER_OS" == Windows ]]; then
+          temp_root="$(cygpath -u "$temp_root")"
+          output_file="$(cygpath -u "$output_file")"
+        fi
+
+        download_dir="$(mktemp -d "$temp_root/packagecascade.XXXXXXXX")"
+        executable="$download_dir/$asset"
+        curl --fail --location --silent --show-error \
+          "$PACKAGECASCADE_RELEASE_URL/$PACKAGECASCADE_VERSION/$asset" --output "$executable"
+        chmod +x "$executable"
+
+        plan_path="$download_dir/packagecascade-plan.json"
+        arguments=(plan "$PACKAGECASCADE_SOLUTION" --outfile "$plan_path")
+        if [[ -n "$PACKAGECASCADE_REPOSITORY" ]]; then
+          arguments+=(--repository "$PACKAGECASCADE_REPOSITORY")
+        fi
+        if [[ -n "$PACKAGECASCADE_CONFIGURATION" ]]; then
+          arguments+=(--configuration "$PACKAGECASCADE_CONFIGURATION")
+        fi
+        "$executable" "${arguments[@]}"
+        test -s "$plan_path"
+
+        if [[ "$RUNNER_OS" == Windows ]]; then
+          plan_path="$(cygpath -w "$plan_path")"
+        fi
+        printf 'plan-path=%s\n' "$plan_path" >> "$output_file"

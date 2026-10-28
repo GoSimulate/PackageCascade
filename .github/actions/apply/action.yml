@@ -1,0 +1,78 @@
+name: PackageCascade apply
+description: Download a pinned PackageCascade release and apply a prepared release plan locally
+
+inputs:
+  version:
+    description: PackageCascade release tag (for example, v1.2.3)
+    required: true
+  plan-path:
+    description: Path to a PackageCascade plan JSON file
+    required: true
+  output-directory:
+    description: Directory for generated package archives
+    required: true
+  repository:
+    description: Path to the Git repository (defaults to the working directory)
+    required: false
+  include-symbols:
+    description: Generate symbol packages (true or false; defaults to false)
+    required: false
+    default: 'false'
+
+outputs:
+  result-path:
+    description: Absolute path to the apply result JSON
+    value: ${{ steps.run.outputs.result-path }}
+
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      env:
+        PACKAGECASCADE_VERSION: ${{ inputs.version }}
+        PACKAGECASCADE_PLAN_PATH: ${{ inputs.plan-path }}
+        PACKAGECASCADE_OUTPUT_DIRECTORY: ${{ inputs.output-directory }}
+        PACKAGECASCADE_REPOSITORY: ${{ inputs.repository }}
+        PACKAGECASCADE_INCLUDE_SYMBOLS: ${{ inputs.include-symbols }}
+        PACKAGECASCADE_RELEASE_URL: https://github.com/GoSimulate/PackageCascade/releases/download
+      run: |
+        set -euo pipefail
+        case "$RUNNER_OS/$RUNNER_ARCH" in
+          Linux/X64) asset=PackageCascade-linux-x64 ;;
+          Windows/X64) asset=PackageCascade-win-x64.exe ;;
+          macOS/X64) asset=PackageCascade-osx-x64 ;;
+          macOS/ARM64) asset=PackageCascade-osx-arm64 ;;
+          *) echo "No PackageCascade release asset for $RUNNER_OS/$RUNNER_ARCH" >&2; exit 1 ;;
+        esac
+
+        temp_root="$RUNNER_TEMP"
+        output_file="$GITHUB_OUTPUT"
+        if [[ "$RUNNER_OS" == Windows ]]; then
+          temp_root="$(cygpath -u "$temp_root")"
+          output_file="$(cygpath -u "$output_file")"
+        fi
+
+        download_dir="$(mktemp -d "$temp_root/packagecascade.XXXXXXXX")"
+        executable="$download_dir/$asset"
+        curl --fail --location --silent --show-error \
+          "$PACKAGECASCADE_RELEASE_URL/$PACKAGECASCADE_VERSION/$asset" --output "$executable"
+        chmod +x "$executable"
+
+        result_path="$download_dir/packagecascade-apply-result.json"
+        arguments=(apply --infile "$PACKAGECASCADE_PLAN_PATH" --output "$PACKAGECASCADE_OUTPUT_DIRECTORY")
+        if [[ -n "$PACKAGECASCADE_REPOSITORY" ]]; then
+          arguments+=(--repository "$PACKAGECASCADE_REPOSITORY")
+        fi
+        case "$PACKAGECASCADE_INCLUDE_SYMBOLS" in
+          true) arguments+=(--include-symbols) ;;
+          false) ;;
+          *) echo 'include-symbols must be true or false' >&2; exit 1 ;;
+        esac
+        "$executable" "${arguments[@]}" > "$result_path"
+        test -s "$result_path"
+
+        if [[ "$RUNNER_OS" == Windows ]]; then
+          result_path="$(cygpath -w "$result_path")"
+        fi
+        printf 'result-path=%s\n' "$result_path" >> "$output_file"
