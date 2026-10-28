@@ -5,3 +5,18 @@
       is MIT: https://github.com/mcintyre321/OneOf/blob/master/licence.md
     declared_license_mapping:
       "https://github.com/mcintyre321/OneOf/blob/master/licence.md": "MIT"
+
+- id: "NuGet::LibGit2Sharp:0.32.0"
+  curations:
+    comment: >-
+      The NuGet package declares a file-based licence that ORT does not parse.
+      App_Readme/LICENSE.md in the package is the MIT licence.
+    concluded_license: "MIT"
+
+- id: "NuGet:LibGit2Sharp:NativeBinaries:2.0.324"
+  curations:
+    comment: >-
+      The NuGet package declares a file-based licence that ORT does not parse.
+      Its bundled libgit2 licence permits linking under GPLv2 with the GCC
+      linking exception: https://github.com/libgit2/libgit2/blob/main/COPYING
+    concluded_license: "GPL-2.0-only WITH GCC-exception-2.0"
