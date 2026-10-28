@@ -11,6 +11,7 @@ on:
     - .github/workflows/canonical-file-guard.yml
 permissions:
   contents: read
+  pull-requests: write
 jobs:
   reject-canonical-file-changes:
     runs-on: blacksmith-2vcpu-ubuntu-2404
@@ -21,6 +22,7 @@ jobs:
     - name: Explain canonical file ownership
       env:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        GITHUB_TOKEN: ${{ github.token }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
       run: |
@@ -42,8 +44,10 @@ jobs:
         git diff --name-only --no-renames -z "${BASE_SHA}...FETCH_HEAD" -- > "$RUNNER_TEMP/changed-files"
 
         matches=0
+        : > "$RUNNER_TEMP/canonical-changes"
         while IFS= read -r -d '' file; do
           if [[ -n "${canonical[$file]+x}" ]]; then
+            printf '%s\0' "$file" >> "$RUNNER_TEMP/canonical-changes"
             escaped=${file//'%'/'%25'}
             escaped=${escaped//$'\r'/'%0D'}
             escaped=${escaped//$'\n'/'%0A'}
@@ -53,6 +57,56 @@ jobs:
         done < "$RUNNER_TEMP/changed-files"
         if (( matches == 0 )); then
           echo '::error::A canonical file changed. Make the change in https://github.com/GoSimulate/github-infra instead.'
+        else
+          python3 - <<'PY'
+        import json
+        import os
+        from pathlib import Path
+        from urllib.request import Request, urlopen
+
+        marker = "<!-- gosim-canonical-file-guard -->"
+        paths = [path.decode() for path in Path(os.environ["RUNNER_TEMP"], "canonical-changes").read_bytes().split(b"\0") if path]
+        source = "https://github.com/GoSimulate/github-infra/tree/main/infra/Github.Infrastructure/CanonicalFiles"
+        body = "\n".join([
+            marker,
+            "### Canonical files changed",
+            "",
+            *(f"- `{path}`" for path in paths),
+            "",
+            f"These files are managed in [GoSimulate/github-infra]({source}). Make the corresponding changes there instead.",
+        ])
+
+        api = os.environ["GITHUB_API_URL"].rstrip("/")
+        repository = os.environ["GITHUB_REPOSITORY"]
+        token = os.environ["GITHUB_TOKEN"]
+        comments_url = f"{api}/repos/{repository}/issues/{os.environ['PR_NUMBER']}/comments"
+
+        def api_request(url, method="GET", comment=None):
+            payload = json.dumps({"body": comment}).encode() if comment is not None else None
+            request = Request(url, data=payload, method=method, headers={
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            })
+            with urlopen(request, timeout=30) as response:
+                result = json.load(response)
+                next_url = next((part.split(";", 1)[0].strip(" <>") for part in response.headers.get("Link", "").split(",") if 'rel="next"' in part), None)
+            return result, next_url
+
+        page = f"{comments_url}?per_page=100"
+        while page:
+            comments, page = api_request(page)
+            for comment in comments:
+                if (comment.get("user") or {}).get("login") == "github-actions[bot]" and marker in (comment.get("body") or ""):
+                    api_request(f"{api}/repos/{repository}/issues/comments/{comment['id']}", "PATCH", body)
+                    break
+            else:
+                continue
+            break
+        else:
+            api_request(comments_url, "POST", body)
+        PY
         fi
         exit 1
 ...
