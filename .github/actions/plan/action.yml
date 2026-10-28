@@ -1,0 +1,59 @@
+name: PackageCascade plan
+description: Download a pinned PackageCascade release and create a release plan
+
+inputs:
+  version:
+    description: PackageCascade release tag (for example, v1.2.3)
+    required: true
+  solution:
+    description: Path to the solution file
+    required: true
+  repository:
+    description: Path to the Git repository (defaults to the working directory)
+    required: false
+  configuration:
+    description: MSBuild configuration (defaults to Release)
+    required: false
+
+outputs:
+  plan-path:
+    description: Absolute path to the generated plan JSON
+    value: ${{ steps.run.outputs.plan-path }}
+
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: pwsh
+      env:
+        PACKAGECASCADE_VERSION: ${{ inputs.version }}
+        PACKAGECASCADE_SOLUTION: ${{ inputs.solution }}
+        PACKAGECASCADE_REPOSITORY: ${{ inputs.repository }}
+        PACKAGECASCADE_CONFIGURATION: ${{ inputs.configuration }}
+        PACKAGECASCADE_RELEASE_URL: https://github.com/GoSimulate/PackageCascade/releases/download
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $asset = switch ("$env:RUNNER_OS/$env:RUNNER_ARCH") {
+          'Linux/X64' { 'PackageCascade-linux-x64' }
+          'Windows/X64' { 'PackageCascade-win-x64.exe' }
+          'macOS/X64' { 'PackageCascade-osx-x64' }
+          'macOS/ARM64' { 'PackageCascade-osx-arm64' }
+          default { throw "PackageCascade has no release asset for $env:RUNNER_OS/$env:RUNNER_ARCH." }
+        }
+
+        $downloadDirectory = Join-Path $env:RUNNER_TEMP ([guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $downloadDirectory | Out-Null
+        $executable = Join-Path $downloadDirectory $asset
+        $tag = [uri]::EscapeDataString($env:PACKAGECASCADE_VERSION)
+        $url = "$env:PACKAGECASCADE_RELEASE_URL/$tag/$asset"
+        Invoke-WebRequest -Uri $url -OutFile $executable
+        if ($env:RUNNER_OS -ne 'Windows') { & chmod +x $executable }
+
+        $planPath = Join-Path $downloadDirectory 'packagecascade-plan.json'
+        $cliArguments = @('plan', $env:PACKAGECASCADE_SOLUTION, '--outfile', $planPath)
+        if ($env:PACKAGECASCADE_REPOSITORY) { $cliArguments += @('--repository', $env:PACKAGECASCADE_REPOSITORY) }
+        if ($env:PACKAGECASCADE_CONFIGURATION) { $cliArguments += @('--configuration', $env:PACKAGECASCADE_CONFIGURATION) }
+        & $executable @cliArguments
+        if ($LASTEXITCODE -ne 0) { throw "PackageCascade plan failed with exit code $LASTEXITCODE." }
+        if (-not (Test-Path -LiteralPath $planPath -PathType Leaf)) { throw 'PackageCascade did not create the plan file.' }
+        "plan-path=$planPath" >> $env:GITHUB_OUTPUT

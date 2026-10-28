@@ -1,0 +1,68 @@
+name: PackageCascade apply
+description: Download a pinned PackageCascade release and apply a prepared release plan locally
+
+inputs:
+  version:
+    description: PackageCascade release tag (for example, v1.2.3)
+    required: true
+  plan-path:
+    description: Path to a PackageCascade plan JSON file
+    required: true
+  output-directory:
+    description: Directory for generated package archives
+    required: true
+  repository:
+    description: Path to the Git repository (defaults to the working directory)
+    required: false
+  include-symbols:
+    description: Generate symbol packages (true or false; defaults to false)
+    required: false
+    default: 'false'
+
+outputs:
+  result-path:
+    description: Absolute path to the apply result JSON
+    value: ${{ steps.run.outputs.result-path }}
+
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: pwsh
+      env:
+        PACKAGECASCADE_VERSION: ${{ inputs.version }}
+        PACKAGECASCADE_PLAN_PATH: ${{ inputs.plan-path }}
+        PACKAGECASCADE_OUTPUT_DIRECTORY: ${{ inputs.output-directory }}
+        PACKAGECASCADE_REPOSITORY: ${{ inputs.repository }}
+        PACKAGECASCADE_INCLUDE_SYMBOLS: ${{ inputs.include-symbols }}
+        PACKAGECASCADE_RELEASE_URL: https://github.com/GoSimulate/PackageCascade/releases/download
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $asset = switch ("$env:RUNNER_OS/$env:RUNNER_ARCH") {
+          'Linux/X64' { 'PackageCascade-linux-x64' }
+          'Windows/X64' { 'PackageCascade-win-x64.exe' }
+          'macOS/X64' { 'PackageCascade-osx-x64' }
+          'macOS/ARM64' { 'PackageCascade-osx-arm64' }
+          default { throw "PackageCascade has no release asset for $env:RUNNER_OS/$env:RUNNER_ARCH." }
+        }
+
+        $downloadDirectory = Join-Path $env:RUNNER_TEMP ([guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $downloadDirectory | Out-Null
+        $executable = Join-Path $downloadDirectory $asset
+        $tag = [uri]::EscapeDataString($env:PACKAGECASCADE_VERSION)
+        $url = "$env:PACKAGECASCADE_RELEASE_URL/$tag/$asset"
+        Invoke-WebRequest -Uri $url -OutFile $executable
+        if ($env:RUNNER_OS -ne 'Windows') { & chmod +x $executable }
+
+        $resultPath = Join-Path $downloadDirectory 'packagecascade-apply-result.json'
+        $cliArguments = @('apply', '--infile', $env:PACKAGECASCADE_PLAN_PATH, '--output', $env:PACKAGECASCADE_OUTPUT_DIRECTORY)
+        if ($env:PACKAGECASCADE_REPOSITORY) { $cliArguments += @('--repository', $env:PACKAGECASCADE_REPOSITORY) }
+        switch ($env:PACKAGECASCADE_INCLUDE_SYMBOLS.ToLowerInvariant()) {
+          'true' { $cliArguments += '--include-symbols' }
+          'false' { }
+          default { throw "include-symbols must be 'true' or 'false'." }
+        }
+        & $executable @cliArguments > $resultPath
+        if ($LASTEXITCODE -ne 0) { throw "PackageCascade apply failed with exit code $LASTEXITCODE." }
+        if (-not (Test-Path -LiteralPath $resultPath -PathType Leaf)) { throw 'PackageCascade did not create an apply result.' }
+        "result-path=$resultPath" >> $env:GITHUB_OUTPUT

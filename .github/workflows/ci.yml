@@ -26,7 +26,7 @@ jobs:
         run: |
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] || [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = 0000000000000000000000000000000000000000 ]; then
             echo 'run=true' >> "$GITHUB_OUTPUT"
-          elif [ -n "$(git diff --name-only "$BASE_SHA" HEAD -- src/ global.json .github/workflows/ci.yml)" ]; then
+          elif [ -n "$(git diff --name-only "$BASE_SHA" HEAD -- src/ global.json .github/actions/ .github/workflows/ci.yml .github/workflows/cd.yml)" ]; then
             echo 'run=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run=false' >> "$GITHUB_OUTPUT"
@@ -47,3 +47,36 @@ jobs:
         run: dotnet build src/PackageCascade.slnx -c Release
       - name: Test
         run: dotnet test --solution src/PackageCascade.slnx -c Release --no-build --no-restore
+  cli-platforms:
+    needs: select
+    if: needs.select.outputs.run_tests == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: blacksmith-2vcpu-ubuntu-2404
+            rid: linux-x64
+            binary: PackageCascade.Cli
+          - os: windows-2025
+            rid: win-x64
+            binary: PackageCascade.Cli.exe
+          - os: macos-15-intel
+            rid: osx-x64
+            binary: PackageCascade.Cli
+          - os: macos-15
+            rid: osx-arm64
+            binary: PackageCascade.Cli
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Publish CLI
+        run: dotnet publish src/PackageCascade.Cli/PackageCascade.Cli.csproj -c Release -r ${{ matrix.rid }} --self-contained true -o artifacts/cli -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=embedded
+      - name: Run CLI help
+        shell: pwsh
+        run: ./artifacts/cli/${{ matrix.binary }} --help

@@ -19,29 +19,51 @@ Your pipeline owns tests, package publication, pushing tags, and any recovery or
 
 ### Run the CLI
 
-The CLI currently runs from a build of this repository. Install the SDK specified in `global.json`, then build it:
+[GitHub releases](https://github.com/GoSimulate/PackageCascade/releases) containing these actions include a self-contained CLI for Linux x64, Windows x64, macOS x64, and macOS arm64. Download the binary for your runner; the tool itself does not require a .NET runtime. Planning and applying still require the SDK used by the consumer projects.
+
+From the repository you want to release, point `cli` at the downloaded binary. These examples use Bash:
 
 ```sh
-dotnet build src/PackageCascade.Cli/PackageCascade.Cli.csproj -c Release
-```
+cli=/absolute/path/to/PackageCascade-linux-x64
+chmod +x "$cli"
 
-From the repository you want to release, point `cli` at that build. These examples use Bash:
-
-```sh
-cli=/absolute/path/to/PackageCascade/src/PackageCascade.Cli/bin/Release/net11.0/PackageCascade.Cli.dll
-
-dotnet "$cli" plan src/Example.slnx --outfile release-plan.json
+"$cli" plan src/Example.slnx --outfile release-plan.json
 # Inspect release-plan.json before applying it.
-dotnet "$cli" apply --infile release-plan.json --output artifacts/packages
+"$cli" apply --infile release-plan.json --output artifacts/packages
 ```
 
 For a single pipeline step, the plan can be streamed directly:
 
 ```sh
 set -o pipefail
-dotnet "$cli" plan src/Example.slnx |
-  dotnet "$cli" apply --output artifacts/packages
+"$cli" plan src/Example.slnx |
+  "$cli" apply --output artifacts/packages
 ```
+
+### Use the GitHub Actions
+
+The `plan` and `apply` composite actions download a specified PackageCascade release and expose paths to their JSON results. Use the same release tag in each `uses` reference and `version` input. Replace `<release-tag>` with a published tag that contains the actions and the binaries for your runner.
+
+```yaml
+- uses: actions/checkout@v7.0.1
+  with:
+    fetch-depth: 0
+- id: plan
+  uses: GoSimulate/PackageCascade/.github/actions/plan@<release-tag>
+  with:
+    version: <release-tag>
+    solution: src/Example.slnx
+- id: apply
+  uses: GoSimulate/PackageCascade/.github/actions/apply@<release-tag>
+  with:
+    version: <release-tag>
+    plan-path: ${{ steps.plan.outputs.plan-path }}
+    output-directory: artifacts/packages
+```
+
+Install the SDK required by your solution before these steps, and run your own tests before applying the plan. The apply action exposes `result-path` for subsequent publication or tag-push steps. Both actions accept an optional `repository` path; plan also accepts `configuration`, while apply accepts `include-symbols`.
+
+To build the CLI from source instead, install the SDK specified in this repository's `global.json` and run `dotnet build src/PackageCascade.Cli/PackageCascade.Cli.csproj -c Release`.
 
 Both commands default to the current directory as the Git repository; use `--repository` to select another. Planning defaults to `Release`; `plan --configuration Debug` or a custom configuration records that choice for apply. Add `apply --include-symbols` to generate `.snupkg` files. Apply writes JSON containing the output package paths and created tag names to standard output.
 
