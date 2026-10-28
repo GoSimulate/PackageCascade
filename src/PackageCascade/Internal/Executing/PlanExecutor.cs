@@ -1,6 +1,5 @@
 using PackageCascade.Internal.Executing.Git;
 using PackageCascade.Internal.Executing.Packaging;
-using PackageCascade.Internal.Git;
 using PackageCascade.Public.Executing;
 using PackageCascade.Public.Definition;
 using NuGet.Versioning;
@@ -12,18 +11,15 @@ internal sealed class PlanExecutor : IPackageCascadeExecutor
 	private readonly IPackageBuilder _packageBuilder;
 	private readonly IPackageArchiveVerifier _archiveVerifier;
 	private readonly IPackageTagWriter _tagWriter;
-	private readonly IRepositoryHeadReader _headReader;
 
 	public PlanExecutor(
 		IPackageBuilder packageBuilder,
 		IPackageArchiveVerifier archiveVerifier,
-		IPackageTagWriter tagWriter,
-		IRepositoryHeadReader headReader)
+		IPackageTagWriter tagWriter)
 	{
 		_packageBuilder = packageBuilder;
 		_archiveVerifier = archiveVerifier;
 		_tagWriter = tagWriter;
-		_headReader = headReader;
 	}
 
 	public async Task<ExecutionResult> Execute(
@@ -35,11 +31,6 @@ internal sealed class PlanExecutor : IPackageCascadeExecutor
 		cancellationToken.ThrowIfCancellationRequested();
 		string repositoryRoot = Path.GetFullPath(repositoryPath);
 		OutputDirectoryScope output = new(options.OutputDirectory);
-		if (!_headReader.ReadHeadSha(repositoryRoot).Equals(plan.TargetCommitSha, StringComparison.OrdinalIgnoreCase))
-		{
-			throw new InvalidOperationException("The release plan targets a different HEAD commit.");
-		}
-
 		PackageBuildInput buildInput = CreateBuildInput(plan, repositoryRoot, output.OutputPath, options.IncludeSymbols);
 		ExpectedPackage[] expected = CreateExpectedPackages(plan);
 		if (plan.Packages.Count == 0)
@@ -50,24 +41,15 @@ internal sealed class PlanExecutor : IPackageCascadeExecutor
 		string stagingPath = output.CreateStagingDirectory();
 		IReadOnlyList<string> archives = await _packageBuilder.Build(
 			buildInput with { OutputDirectory = stagingPath }, cancellationToken);
-		_archiveVerifier.Verify(archives, expected, options.IncludeSymbols);
-		IReadOnlyList<string> packagePaths = output.CopyVerifiedArchives(archives);
+		await _archiveVerifier.Verify(archives, expected, options.IncludeSymbols, cancellationToken);
+		IReadOnlyList<string> packagePaths = await output.CopyVerifiedArchives(archives, cancellationToken);
 		output.FinishStaging();
 
-		EnsureHeadUnchanged(repositoryRoot, plan);
 		cancellationToken.ThrowIfCancellationRequested();
 		IReadOnlyList<string> createdTags = _tagWriter.Create(repositoryRoot, plan);
 
 		cancellationToken.ThrowIfCancellationRequested();
 		return new(packagePaths, createdTags);
-	}
-
-	private void EnsureHeadUnchanged(string repositoryRoot, ReleasePlan plan)
-	{
-		if (!_headReader.ReadHeadSha(repositoryRoot).Equals(plan.TargetCommitSha, StringComparison.OrdinalIgnoreCase))
-		{
-			throw new InvalidOperationException("Repository HEAD changed while the release plan was being applied.");
-		}
 	}
 
 	private static PackageBuildInput CreateBuildInput(ReleasePlan plan, string repositoryRoot,
@@ -119,19 +101,7 @@ internal sealed class PlanExecutor : IPackageCascadeExecutor
 
 	private static string ResolveProjectPath(string repositoryRoot, string projectPath)
 	{
-		if (Path.IsPathRooted(projectPath))
-		{
-			throw new InvalidOperationException($"Planned project path '{projectPath}' must be relative to the repository.");
-		}
-
-		string fullPath = Path.GetFullPath(Path.Combine(repositoryRoot, projectPath));
-		string relativePath = Path.GetRelativePath(repositoryRoot, fullPath);
-		if (relativePath == ".." || relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-		{
-			throw new InvalidOperationException($"Planned project path '{projectPath}' escapes the repository.");
-		}
-
-		return fullPath;
+		return Path.GetFullPath(projectPath, repositoryRoot);
 	}
 
 	private static void ValidateVersion(string packageId, string version)

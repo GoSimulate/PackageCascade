@@ -56,7 +56,7 @@ public sealed class PackageBuilderTests : IDisposable
 	[Test]
 	public async Task PacksIndependentVersionsAndPreservesDirectoryBuildImports()
 	{
-		IReadOnlyList<string> archives = await new PackageBuilder().Build(Input([_projectB, _projectA]), CancellationToken.None);
+		IReadOnlyList<string> archives = await NewBuilder().Build(Input([_projectB, _projectA]), CancellationToken.None);
 
 		using (Assert.Multiple())
 		{
@@ -77,7 +77,7 @@ public sealed class PackageBuilderTests : IDisposable
 			""");
 
 		InvalidOperationException? error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-			new PackageBuilder().Build(Input([_projectA]) with { WorkingDirectory = nestedDirectory }, CancellationToken.None));
+			NewBuilder().Build(Input([_projectA]) with { WorkingDirectory = nestedDirectory }, CancellationToken.None));
 
 		await Assert.That(error!.Message).Contains("99.0.100");
 	}
@@ -91,7 +91,7 @@ public sealed class PackageBuilderTests : IDisposable
 		solution.Root!.Add(new XElement("Project", new XAttribute("Path", "Unrelated/Unrelated.csproj")));
 		solution.Save(_solutionPath);
 
-		IReadOnlyList<string> archives = await new PackageBuilder().Build(Input([_projectB, _projectA]), CancellationToken.None);
+		IReadOnlyList<string> archives = await NewBuilder().Build(Input([_projectB, _projectA]), CancellationToken.None);
 
 		using (Assert.Multiple())
 		{
@@ -117,7 +117,7 @@ public sealed class PackageBuilderTests : IDisposable
 		targets.Save(Path.Combine(_directory, "Directory.Build.targets"));
 		string[] projects = [Path.Combine(_directory, first, first + ".csproj"), Path.Combine(_directory, second, second + ".csproj")];
 
-		await new PackageBuilder().Build(Input(projects), CancellationToken.None);
+		await NewBuilder().Build(Input(projects), CancellationToken.None);
 
 		await Assert.That(File.ReadAllLines(orderPath).SequenceEqual([first, second])).IsTrue();
 	}
@@ -125,7 +125,7 @@ public sealed class PackageBuilderTests : IDisposable
 	[Test]
 	public async Task PacksOnlySelectedProjectAgainstUnchangedDependencyAndIncludesSymbols()
 	{
-		IReadOnlyList<string> archives = await new PackageBuilder().Build(Input([_projectA], includeSymbols: true), CancellationToken.None);
+		IReadOnlyList<string> archives = await NewBuilder().Build(Input([_projectA], includeSymbols: true), CancellationToken.None);
 
 		using (Assert.Multiple())
 		{
@@ -158,7 +158,7 @@ public sealed class PackageBuilderTests : IDisposable
 			}
 			""");
 
-		await new PackageBuilder().Build(Input([_projectB, _projectA]), CancellationToken.None);
+		await NewBuilder().Build(Input([_projectB, _projectA]), CancellationToken.None);
 
 		XDocument manifest = ReadManifest("A.2.3.4.nupkg");
 		using (Assert.Multiple())
@@ -182,19 +182,18 @@ public sealed class PackageBuilderTests : IDisposable
 		targets.Save(Path.Combine(_directory, "Directory.Build.targets"));
 
 		InvalidOperationException? exception = await Assert.ThrowsAsync<InvalidOperationException>(
-			() => new PackageBuilder().Build(Input([_projectB, _projectA]), CancellationToken.None));
+			() => NewBuilder().Build(Input([_projectB, _projectA]), CancellationToken.None));
 
 		using (Assert.Multiple())
 		{
 			await Assert.That(exception!.Message).Contains("7.6.5");
-			await Assert.That(Directory.GetFiles(_directory, "*.packagecascade-*.targets", SearchOption.AllDirectories)).IsEmpty();
 			await Assert.That(exception!.Message).Contains("2.3.4");
 			await Assert.That(Directory.GetFiles(_outputDirectory)).IsEmpty();
 		}
 	}
 
 	[Test]
-	public async Task PreservesExistingVersionHookAndCleansTemporaryImports()
+	public async Task PreservesExistingVersionHook()
 	{
 		string hookPath = Path.Combine(_directory, "consumer.targets");
 		File.WriteAllText(hookPath, """
@@ -212,14 +211,13 @@ public sealed class PackageBuilderTests : IDisposable
 			public static class A { public static int Value => B.Value; }
 			""");
 
-		await new PackageBuilder().Build(Input([_projectB, _projectA]), CancellationToken.None);
+		await NewBuilder().Build(Input([_projectB, _projectA]), CancellationToken.None);
 
 		using (Assert.Multiple())
 		{
 			await AssertIdentity(ReadManifest("A.2.3.4.nupkg"), "A", "2.3.4");
 			await Assert.That(File.ReadAllText(Path.Combine(_directory, "A", "obj", "Release", "net11.0", "A.AssemblyInfo.cs")))
 				.Contains("AssemblyVersionAttribute(\"2.3.4.0\")");
-			await Assert.That(Directory.GetFiles(_directory, "*.packagecascade-*.targets", SearchOption.AllDirectories)).IsEmpty();
 			await Assert.That(File.Exists(hookPath)).IsTrue();
 		}
 	}
@@ -239,13 +237,12 @@ public sealed class PackageBuilderTests : IDisposable
 			},
 		};
 
-		await new PackageBuilder().Build(input, CancellationToken.None);
+		await NewBuilder().Build(input, CancellationToken.None);
 
 		using (Assert.Multiple())
 		{
 			await AssertIdentity(ReadManifest("A.2.3.4.nupkg"), "A", "2.3.4");
 			await AssertMinimumDependency(ReadManifest("A.2.3.4.nupkg").Descendants().Single(element => element.Name.LocalName == "dependency"), "B", "3.4.5");
-			await Assert.That(Directory.GetFiles(_directory, "*.packagecascade-*.targets", SearchOption.AllDirectories)).IsEmpty();
 		}
 	}
 
@@ -253,6 +250,8 @@ public sealed class PackageBuilderTests : IDisposable
 	{
 		Directory.Delete(_directory, recursive: true);
 	}
+
+	private static PackageBuilder NewBuilder() => new(new PackageVersionMapWriter());
 
 	private PackageBuildInput Input(IReadOnlyList<string> selectedProjects, bool includeSymbols = false)
 	{

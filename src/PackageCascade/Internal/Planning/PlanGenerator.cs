@@ -1,5 +1,4 @@
 using PackageCascade.Internal.Planning.Git;
-using PackageCascade.Internal.Git;
 using PackageCascade.Internal.Planning.Projects;
 using PackageCascade.Internal.Planning.SemVer;
 using NuGet.Versioning;
@@ -12,7 +11,6 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 {
 	private readonly ISolutionPackageDiscoverer _packageDiscoverer;
 	private readonly IGitCommitReader _commitReader;
-	private readonly IRepositoryHeadReader _headReader;
 	private readonly IPackageTagReader _tagReader;
 	private readonly IPackageDependencyGraphBuilder _graphBuilder;
 	private readonly IDirectoryBumpCalculator _directoryCalculator;
@@ -21,7 +19,6 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 	public PlanGenerator(
 		ISolutionPackageDiscoverer packageDiscoverer,
 		IGitCommitReader commitReader,
-		IRepositoryHeadReader headReader,
 		IPackageTagReader tagReader,
 		IPackageDependencyGraphBuilder graphBuilder,
 		IDirectoryBumpCalculator directoryCalculator,
@@ -29,7 +26,6 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 	{
 		_packageDiscoverer = packageDiscoverer;
 		_commitReader = commitReader;
-		_headReader = headReader;
 		_tagReader = tagReader;
 		_graphBuilder = graphBuilder;
 		_directoryCalculator = directoryCalculator;
@@ -59,7 +55,7 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 		IReadOnlyList<ReferencedPackage> referencedPackages = GetReferencedPackages(repositoryPath, selected, graph, tags);
 		string workingDirectory = Path.GetRelativePath(repositoryPath, Path.GetDirectoryName(Path.GetFullPath(solutionPath))!)
 			.Replace('\\', '/');
-		return new(packages, _headReader.ReadHeadSha(repositoryPath), configuration, referencedPackages, workingDirectory);
+		return new(packages, configuration, referencedPackages, workingDirectory);
 	}
 
 	private static IReadOnlyList<ReferencedPackage> GetReferencedPackages(

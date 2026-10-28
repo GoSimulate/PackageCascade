@@ -21,7 +21,7 @@ internal sealed class OutputDirectoryScope
 		return _stagingPath ??= Directory.CreateTempSubdirectory("packagecascade-apply-").FullName;
 	}
 
-	public IReadOnlyList<string> CopyVerifiedArchives(IReadOnlyList<string> archivePaths)
+	public async Task<IReadOnlyList<string>> CopyVerifiedArchives(IReadOnlyList<string> archivePaths, CancellationToken cancellationToken)
 	{
 		if (_stagingPath is null)
 		{
@@ -34,6 +34,7 @@ internal sealed class OutputDirectoryScope
 			? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 		foreach (string archivePath in archivePaths)
 		{
+			cancellationToken.ThrowIfCancellationRequested();
 			string source = Path.GetFullPath(archivePath);
 			if (!string.Equals(Path.GetDirectoryName(source), _stagingPath, pathComparison))
 			{
@@ -41,10 +42,21 @@ internal sealed class OutputDirectoryScope
 			}
 
 			string destination = Path.Combine(_path, Path.GetFileName(source));
-			using FileStream output = new(destination, FileMode.CreateNew, FileAccess.Write);
+			await using FileStream output = new(destination, new FileStreamOptions
+			{
+				Mode = FileMode.Create,
+				Access = FileAccess.Write,
+				Options = FileOptions.Asynchronous,
+			});
 			copied.Add(destination);
-			using FileStream input = File.OpenRead(source);
-			input.CopyTo(output);
+			await using FileStream input = new(source, new FileStreamOptions
+			{
+				Mode = FileMode.Open,
+				Access = FileAccess.Read,
+				Share = FileShare.Read,
+				Options = FileOptions.Asynchronous | FileOptions.SequentialScan,
+			});
+			await input.CopyToAsync(output, cancellationToken);
 		}
 
 		return copied;

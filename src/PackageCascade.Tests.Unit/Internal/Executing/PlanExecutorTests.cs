@@ -1,7 +1,6 @@
 using PackageCascade.Internal.Executing;
 using PackageCascade.Internal.Executing.Git;
 using PackageCascade.Internal.Executing.Packaging;
-using PackageCascade.Internal.Git;
 using PackageCascade.Public.Executing;
 using PackageCascade.Public.Definition;
 
@@ -14,8 +13,7 @@ public sealed class PlanExecutorTests : IDisposable
 	private readonly StubPackageBuilder _builder;
 	private readonly StubArchiveVerifier _verifier;
 	private readonly StubTagWriter _tags;
-	private readonly StubHeadReader _commits;
-	private readonly ReleasePlan _plan = new([new("A", "src/A.csproj", "1.2.0", [], ["B"])], "head-sha", "Release", [new("B", "src/B.csproj", "2.0.0")], ".");
+	private readonly ReleasePlan _plan = new([new("A", "src/A.csproj", "1.2.0", [], ["B"])], "Release", [new("B", "src/B.csproj", "2.0.0")], ".");
 
 	public PlanExecutorTests()
 	{
@@ -25,7 +23,6 @@ public sealed class PlanExecutorTests : IDisposable
 		_builder = new StubPackageBuilder(input => [WriteArchive(input.OutputDirectory)]);
 		_verifier = new StubArchiveVerifier();
 		_tags = new StubTagWriter();
-		_commits = new StubHeadReader();
 	}
 
 	public void Dispose()
@@ -42,10 +39,9 @@ public sealed class PlanExecutorTests : IDisposable
 	}
 
 	[Test]
-	public async Task ForwardsPlanAndOptionsToCollaborators()
+	public async Task ForwardsPlanAndOptionsToCollaborators(CancellationToken cancellationToken)
 	{
-		using CancellationTokenSource cancellation = new();
-		await Execute(new(_outputDirectory, true), cancellation.Token);
+		await Execute(new(_outputDirectory, true), cancellationToken);
 
 		using (Assert.Multiple())
 		{
@@ -55,9 +51,10 @@ public sealed class PlanExecutorTests : IDisposable
 			await Assert.That(_builder.Input.VersionsByProjectPath[Path.Combine(_repositoryPath, "src/B.csproj")]).IsEqualTo("2.0.0");
 			await Assert.That(_builder.Input.Configuration).IsEqualTo("Release");
 			await Assert.That(_builder.Input.IncludeSymbols).IsTrue();
-			await Assert.That(_builder.Token).IsEqualTo(cancellation.Token);
+			await Assert.That(_builder.Token).IsEqualTo(cancellationToken);
 			await Assert.That(_verifier.Archives).IsEquivalentTo(new[] { Path.Combine(_builder.Input!.OutputDirectory, "A.1.2.0.nupkg") });
 			await Assert.That(_verifier.IncludeSymbols).IsTrue();
+			await Assert.That(_verifier.Token).IsEqualTo(cancellationToken);
 			await Assert.That(_verifier.Packages.Single().PackageId).IsEqualTo("A");
 			await Assert.That(_verifier.Packages.Single().Version).IsEqualTo("1.2.0");
 			await Assert.That(_verifier.Packages.Single().DirectDependencyVersions["B"]).IsEqualTo("2.0.0");
@@ -95,18 +92,18 @@ public sealed class PlanExecutorTests : IDisposable
 			await Assert.That(result.PackagePaths).IsEmpty();
 			await Assert.That(result.CreatedTags).IsEmpty();
 			await Assert.That(File.ReadAllText(existingFile)).IsEqualTo("keep this file");
-			await Assert.That(_commits.ReadCount).IsEqualTo(1);
 			await Assert.That(_builder.Input).IsNull();
 		}
 	}
 
 	[Test]
-	public async Task EmptyPlanStillRejectsInvalidInputs()
+	public async Task ResolvesReferencedProjectOutsideRepository()
 	{
-		ReleasePlan invalid = _plan with { Packages = [], ReferencedPackages = [new("B", "../outside.csproj", "2.0.0")] };
+		ReleasePlan plan = _plan with { ReferencedPackages = [new("B", "../outside.csproj", "2.0.0")] };
 
-		await Assert.ThrowsAsync<InvalidOperationException>(() =>
-			CreateExecutor().Execute(invalid, _repositoryPath, new(_outputDirectory)));
+		await CreateExecutor().Execute(plan, _repositoryPath, new(_outputDirectory));
+
+		await Assert.That(_builder.Input!.VersionsByProjectPath[Path.GetFullPath(Path.Combine(_repositoryPath, "../outside.csproj"))]).IsEqualTo("2.0.0");
 	}
 
 	[Test]
@@ -204,11 +201,11 @@ public sealed class PlanExecutorTests : IDisposable
 	}
 
 	[Test]
-	public async Task ExistingArchiveNameCannotBeOverwritten()
+	public async Task ExistingArchiveNameIsOverwritten()
 	{
 		Directory.CreateDirectory(_outputDirectory);
 		string existingArchive = Path.Combine(_outputDirectory, "A.1.2.0.snupkg");
-		File.WriteAllText(existingArchive, "pre-existing symbol content");
+		File.WriteAllText(existingArchive, "pre-existing symbol content longer than replacement");
 		_builder.BuildAction = input =>
 		{
 			string package = WriteArchive(input.OutputDirectory);
@@ -217,14 +214,15 @@ public sealed class PlanExecutorTests : IDisposable
 			return [package, symbols];
 		};
 
-		await Assert.ThrowsAsync<IOException>(() => Execute(new(_outputDirectory, true)));
+		ExecutionResult result = await Execute(new(_outputDirectory, true));
 
 		using (Assert.Multiple())
 		{
-			await Assert.That(File.ReadAllText(existingArchive)).IsEqualTo("pre-existing symbol content");
+			await Assert.That(File.ReadAllText(existingArchive)).IsEqualTo("new symbol content");
 			await Assert.That(File.Exists(Path.Combine(_outputDirectory, "A.1.2.0.nupkg"))).IsTrue();
-			await Assert.That(_tags.Plan).IsNull();
-			await Assert.That(Directory.Exists(_builder.Input!.OutputDirectory)).IsTrue();
+			await Assert.That(result.PackagePaths).Contains(existingArchive);
+			await Assert.That(_tags.Plan).IsEqualTo(_plan);
+			await Assert.That(Directory.Exists(_builder.Input!.OutputDirectory)).IsFalse();
 		}
 	}
 
@@ -244,24 +242,6 @@ public sealed class PlanExecutorTests : IDisposable
 			await Assert.That(File.ReadAllText(existingFile)).IsEqualTo("user content");
 			await Assert.That(Directory.Exists(_outputDirectory)).IsTrue();
 			await Assert.That(Directory.Exists(_builder.Input!.OutputDirectory)).IsTrue();
-			await Assert.That(_tags.Plan).IsNull();
-		}
-	}
-
-	[Test]
-	public async Task ChangedHeadAfterBuildPreventsTagsAndLeavesVerifiedOutput()
-	{
-		_builder.BuildAction = input =>
-		{
-			_commits.Head = "changed-head";
-			return [WriteArchive(input.OutputDirectory)];
-		};
-
-		await Assert.ThrowsAsync<InvalidOperationException>(() => Execute());
-
-		using (Assert.Multiple())
-		{
-			await Assert.That(File.Exists(Path.Combine(_outputDirectory, "A.1.2.0.nupkg"))).IsTrue();
 			await Assert.That(_tags.Plan).IsNull();
 		}
 	}
@@ -324,7 +304,7 @@ public sealed class PlanExecutorTests : IDisposable
 	private Task<ExecutionResult> Execute(ExecutionOptions? options = null, CancellationToken token = default)
 		=> CreateExecutor().Execute(_plan, _repositoryPath, options ?? new(_outputDirectory), token);
 
-	private PlanExecutor CreateExecutor() => new(_builder, _verifier, _tags, _commits);
+	private PlanExecutor CreateExecutor() => new(_builder, _verifier, _tags);
 
 	private string WriteArchive(string? directory = null)
 	{
@@ -357,16 +337,21 @@ public sealed class PlanExecutorTests : IDisposable
 		public IReadOnlyList<string> Archives { get; private set; } = [];
 		public IReadOnlyList<ExpectedPackage> Packages { get; private set; } = [];
 		public bool IncludeSymbols { get; private set; }
+		public CancellationToken Token { get; private set; }
 		public Exception? Error { get; set; }
-		public void Verify(IReadOnlyList<string> archivePaths, IReadOnlyList<ExpectedPackage> packages, bool includeSymbols)
+		public Task Verify(IReadOnlyList<string> archivePaths, IReadOnlyList<ExpectedPackage> packages, bool includeSymbols,
+			CancellationToken cancellationToken = default)
 		{
 			Archives = archivePaths;
 			Packages = packages;
 			IncludeSymbols = includeSymbols;
+			Token = cancellationToken;
 			if (Error is not null)
 			{
 				throw Error;
 			}
+
+			return Task.CompletedTask;
 		}
 	}
 
@@ -387,17 +372,6 @@ public sealed class PlanExecutorTests : IDisposable
 			}
 
 			return ["A-v1.2.0"];
-		}
-	}
-
-	private sealed class StubHeadReader : IRepositoryHeadReader
-	{
-		public string Head { get; set; } = "head-sha";
-		public int ReadCount { get; private set; }
-		public string ReadHeadSha(string repositoryPath)
-		{
-			ReadCount++;
-			return Head;
 		}
 	}
 }

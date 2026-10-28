@@ -1,5 +1,4 @@
 using PackageCascade.Internal.Planning.Git;
-using PackageCascade.Internal.Git;
 using PackageCascade.Internal.Planning.Projects;
 using PackageCascade.Internal.Planning.SemVer;
 using PackageCascade.Public.Planning;
@@ -275,7 +274,7 @@ public sealed class PlanGeneratorTests
 	[Test]
 	[Arguments("Debug")]
 	[Arguments("Staging")]
-	public async Task IncludesHeadShaAndRequestedConfiguration(string configuration)
+	public async Task IncludesRequestedConfiguration(string configuration)
 	{
 		StubCommitReader commits = new([]);
 		StubDiscoverer discoverer = new(Graph());
@@ -285,7 +284,6 @@ public sealed class PlanGeneratorTests
 
 		using (Assert.Multiple())
 		{
-			await Assert.That(plan.TargetCommitSha).IsEqualTo("head-sha");
 			await Assert.That(plan.Configuration).IsEqualTo(configuration);
 			await Assert.That(discoverer.Configuration).IsEqualTo(configuration);
 		}
@@ -316,7 +314,7 @@ public sealed class PlanGeneratorTests
 
 	private static PlanGenerator CreateGenerator(StubDiscoverer discoverer, IGitCommitReader commits,
 		IReadOnlyDictionary<string, PackageReleaseTag> tags)
-		=> new(discoverer, commits, new StubHeadReader(), new StubTagReader(tags), new StubGraphBuilder(),
+		=> new(discoverer, commits, new StubTagReader(tags), new StubGraphBuilder(),
 			new StubDirectoryBumpCalculator(), new StubPackageBumpCalculator());
 
 	private static async Task AssertVersions(ReleasePlan plan, params (string PackageId, string Version)[] expected)
@@ -394,11 +392,6 @@ public sealed class PlanGeneratorTests
 
 		public IReadOnlyList<GitCommitDetails> ReadSince(string repositoryPath, string baselineCommitHash)
 			=> _commitsByBaseline is null ? _commits : _commitsByBaseline[baselineCommitHash];
-	}
-
-	private sealed class StubHeadReader : IRepositoryHeadReader
-	{
-		public string ReadHeadSha(string repositoryPath) => "head-sha";
 	}
 
 	private sealed class StubGraphBuilder : IPackageDependencyGraphBuilder

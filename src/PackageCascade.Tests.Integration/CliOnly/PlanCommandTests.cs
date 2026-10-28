@@ -68,7 +68,7 @@ public sealed class PlanCommandTests : IDisposable
 		ReleasePlan plan = new(
 			[new PlannedRelease("Fixture", "src/Fixture/Fixture.csproj", "1.2.4",
 				[new ConventionalCommitReason(SemverBump.Patch, ["abc"]),
-					new DependencyReleaseReason("Foundation")], ["Foundation"])], "target-sha", "Release",
+					new DependencyReleaseReason("Foundation")], ["Foundation"])], "Release",
 			[new ReferencedPackage("Foundation", "src/Foundation/Foundation.csproj", "3.2.1")], ".");
 		StubPlanner planner = new(plan);
 		TestBootstrap bootstrap = new(services => services.AddSingleton<IPackageCascadePlanner>(planner));
@@ -108,7 +108,7 @@ public sealed class PlanCommandTests : IDisposable
 			SolutionPath = solutionPath;
 			Configuration = configuration;
 
-			return _plan ?? new([], "target-sha", configuration, [], ".");
+			return _plan ?? new([], configuration, [], ".");
 		}
 	}
 }
