@@ -42,26 +42,35 @@ set -o pipefail
 
 ### Use the GitHub Actions
 
-The `plan` and `apply` composite actions download a specified PackageCascade release and expose paths to their JSON results. Use the same release tag in each `uses` reference and `version` input. Replace `<release-tag>` with a published tag that contains the actions and the binaries for your runner.
+The `plan` and `apply` composite actions download a specified PackageCascade release and expose paths to their JSON results. This example is a workflow in the repository being released. Replace `<release-tag>` with a published PackageCascade tag, and use that same tag in each `uses` reference and `version` input. Change the solution path to match your repository.
 
 ```yaml
-- uses: actions/checkout@v7.0.1
-  with:
-    fetch-depth: 0
-- id: plan
-  uses: GoSimulate/PackageCascade/.github/actions/plan@<release-tag>
-  with:
-    version: <release-tag>
-    solution: src/Example.slnx
-- id: apply
-  uses: GoSimulate/PackageCascade/.github/actions/apply@<release-tag>
-  with:
-    version: <release-tag>
-    plan-path: ${{ steps.plan.outputs.plan-path }}
-    output-directory: artifacts/packages
+name: Prepare packages
+on: workflow_dispatch
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v6.0.0
+        with:
+          global-json-file: global.json
+      - id: plan
+        uses: GoSimulate/PackageCascade/.github/actions/plan@<release-tag>
+        with:
+          version: <release-tag>
+          solution: src/Example.slnx
+      - id: apply
+        uses: GoSimulate/PackageCascade/.github/actions/apply@<release-tag>
+        with:
+          version: <release-tag>
+          plan-path: ${{ steps.plan.outputs.plan-path }}
+          output-directory: artifacts/packages
 ```
 
-Install the SDK required by your solution before these steps, and run your own tests before applying the plan. The apply action exposes `result-path` for subsequent publication or tag-push steps. Both actions accept an optional `repository` path; plan also accepts `configuration`, while apply accepts `include-symbols`.
+The example reads the SDK version from the consumer repository's `global.json`; configure SDK installation for your repository if it uses another method. Run your own tests before applying the plan. The apply action exposes `result-path` for subsequent publication or tag-push steps. Both actions accept an optional `repository` path; plan also accepts `configuration`, while apply accepts `include-symbols`.
 
 To build the CLI from source instead, install the SDK specified in this repository's `global.json` and run `dotnet build src/PackageCascade.Cli/PackageCascade.Cli.csproj -c Release`.
 
