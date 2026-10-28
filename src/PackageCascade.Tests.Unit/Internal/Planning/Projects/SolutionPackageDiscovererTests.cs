@@ -1,6 +1,7 @@
+using PackageCascade.Internal.Planning.Projects;
 using PackageCascade.Internal.Planning;
 
-namespace PackageCascade.Tests.Unit;
+namespace PackageCascade.Tests.Unit.Internal.Planning.Projects;
 
 
 public class SolutionPackageDiscovererTests : IDisposable

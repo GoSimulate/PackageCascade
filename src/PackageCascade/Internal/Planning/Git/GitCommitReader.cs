@@ -1,8 +1,8 @@
 using LibGit2Sharp;
 
-namespace PackageCascade.Internal.Planning;
+namespace PackageCascade.Internal.Planning.Git;
 
-internal sealed class GitCommitReader
+internal sealed class GitCommitReader : IGitCommitReader
 {
 	public IReadOnlyList<GitCommitDetails> ReadSince(string repositoryPath, string baselineCommitHash)
 	{
@@ -26,7 +26,7 @@ internal sealed class GitCommitReader
 		List<GitCommitDetails> commits = new();
 		foreach (Commit commit in repository.Commits.QueryBy(filter))
 		{
-			commits.Add(new GitCommitDetails(commit.Sha, commit.Message.Trim(), GetChangedPaths(repository, commit)));
+			commits.Add(new(commit.Sha, commit.Message.Trim(), GetChangedPaths(repository, commit)));
 		}
 
 		return commits;

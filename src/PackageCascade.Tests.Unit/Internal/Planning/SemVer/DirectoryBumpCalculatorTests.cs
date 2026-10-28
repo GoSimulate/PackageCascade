@@ -1,6 +1,9 @@
+using PackageCascade.Internal.Planning.Git;
+using PackageCascade.Internal.Planning.SemVer;
+using PackageCascade.Public.Planning.Definition;
 using PackageCascade.Internal.Planning;
 
-namespace PackageCascade.Tests.Unit;
+namespace PackageCascade.Tests.Unit.Internal.Planning.SemVer;
 
 public class DirectoryBumpCalculatorTests
 {
@@ -42,6 +45,16 @@ public class DirectoryBumpCalculatorTests
 		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], ["src/A"]);
 
 		await Assert.That(bumps["src/A"]).IsEqualTo(SemverBump.None);
+	}
+
+	[Test]
+	public async Task MatchesProjectAtRepositoryRoot()
+	{
+		GitCommitDetails commit = new("commit", "fix: repair", ["Api.cs"]);
+
+		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], ["."]);
+
+		await Assert.That(bumps["."]).IsEqualTo(SemverBump.Patch);
 	}
 
 	[Test]

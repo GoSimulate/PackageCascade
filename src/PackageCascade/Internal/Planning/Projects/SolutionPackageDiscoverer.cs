@@ -3,9 +3,9 @@ using Microsoft.Build.Execution;
 using Microsoft.Build.Graph;
 using Microsoft.Build.Locator;
 
-namespace PackageCascade.Internal.Planning;
+namespace PackageCascade.Internal.Planning.Projects;
 
-internal sealed class SolutionPackageDiscoverer
+internal sealed class SolutionPackageDiscoverer : ISolutionPackageDiscoverer
 {
 	static SolutionPackageDiscoverer()
 	{

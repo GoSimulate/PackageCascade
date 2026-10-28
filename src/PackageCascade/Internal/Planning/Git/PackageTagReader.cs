@@ -1,9 +1,9 @@
 using LibGit2Sharp;
 using NuGet.Versioning;
 
-namespace PackageCascade.Internal.Planning;
+namespace PackageCascade.Internal.Planning.Git;
 
-internal sealed class PackageTagReader
+internal sealed class PackageTagReader : IPackageTagReader
 {
 	public IReadOnlyDictionary<string, PackageReleaseTag> ReadLatest(string repositoryPath, IEnumerable<string> packageIds)
 	{

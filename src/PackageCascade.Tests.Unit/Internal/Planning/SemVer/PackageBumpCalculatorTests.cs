@@ -1,6 +1,9 @@
+using PackageCascade.Internal.Planning.Projects;
+using PackageCascade.Internal.Planning.SemVer;
+using PackageCascade.Public.Planning.Definition;
 using PackageCascade.Internal.Planning;
 
-namespace PackageCascade.Tests.Unit;
+namespace PackageCascade.Tests.Unit.Internal.Planning.SemVer;
 
 public class PackageBumpCalculatorTests
 {

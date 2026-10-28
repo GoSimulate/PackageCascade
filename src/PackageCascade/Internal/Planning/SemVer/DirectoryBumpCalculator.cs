@@ -1,8 +1,10 @@
+using PackageCascade.Internal.Planning.Git;
+using PackageCascade.Public.Planning.Definition;
 using System.Text.RegularExpressions;
 
-namespace PackageCascade.Internal.Planning;
+namespace PackageCascade.Internal.Planning.SemVer;
 
-internal sealed partial class DirectoryBumpCalculator
+internal sealed partial class DirectoryBumpCalculator : IDirectoryBumpCalculator
 {
 	public Dictionary<string, SemverBump> Calculate(IEnumerable<GitCommitDetails> commits, IEnumerable<string> directories)
 	{
@@ -11,7 +13,7 @@ internal sealed partial class DirectoryBumpCalculator
 		foreach (string directory in directories)
 		{
 			bumps.Add(directory, SemverBump.None);
-			directoryPrefixes.Add(directory, directory.TrimEnd('/', '\\').Replace('\\', '/') + "/");
+			directoryPrefixes.Add(directory, directory is "." or "" ? "" : directory.TrimEnd('/', '\\').Replace('\\', '/') + "/");
 		}
 
 		foreach (GitCommitDetails commit in commits)

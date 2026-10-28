@@ -1,6 +1,6 @@
-namespace PackageCascade.Internal.Planning;
+namespace PackageCascade.Internal.Planning.Projects;
 
-internal sealed class PackageDependencyGraphBuilder
+internal sealed class PackageDependencyGraphBuilder : IPackageDependencyGraphBuilder
 {
 	public IReadOnlyDictionary<PackableProject, IReadOnlyList<PackableProject>> Build(IReadOnlyList<PackableProject> projects)
 	{

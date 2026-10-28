@@ -1,8 +1,10 @@
+using PackageCascade.Internal.Planning.Projects;
+using PackageCascade.Public.Planning.Definition;
 using System.Diagnostics.Contracts;
 
-namespace PackageCascade.Internal.Planning;
+namespace PackageCascade.Internal.Planning.SemVer;
 
-internal sealed class PackageBumpCalculator
+internal sealed class PackageBumpCalculator : IPackageBumpCalculator
 {
 	[Pure]
 	public IReadOnlyDictionary<PackableProject, SemverBump> Calculate(
