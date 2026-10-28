@@ -3,7 +3,6 @@ updates:
   - package-ecosystem: nuget
     directories:
       - /src/*
-      - /infra/*
     schedule:
       interval: weekly
     commit-message:
