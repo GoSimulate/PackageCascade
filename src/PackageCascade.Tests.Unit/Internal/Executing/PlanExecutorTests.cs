@@ -251,7 +251,11 @@ public sealed class PlanExecutorTests : IDisposable
 	[Test]
 	public async Task ChangedHeadAfterBuildPreventsTagsAndLeavesVerifiedOutput()
 	{
-		_commits.Head = "changed-head";
+		_builder.BuildAction = input =>
+		{
+			_commits.Head = "changed-head";
+			return [WriteArchive(input.OutputDirectory)];
+		};
 
 		await Assert.ThrowsAsync<InvalidOperationException>(() => Execute());
 
