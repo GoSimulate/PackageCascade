@@ -8,5 +8,6 @@
   <ItemGroup>
     <PackageReference Include="TUnit" Version="1.68.4" />
     <ProjectReference Include="../PackageCascade/PackageCascade.csproj" />
+    <ProjectReference Include="../PackageCascade.Cli/PackageCascade.Cli.csproj" />
   </ItemGroup>
 </Project>

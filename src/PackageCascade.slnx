@@ -1,5 +1,11 @@
 <Solution>
-  <Project Path="PackageCascade/PackageCascade.csproj" />
-  <Project Path="PackageCascade.Tests.Unit/PackageCascade.Tests.Unit.csproj" />
+  <Folder Name="/Core/">
+    <Project Path="PackageCascade/PackageCascade.csproj" />
+    <Project Path="PackageCascade.Tests.Unit/PackageCascade.Tests.Unit.csproj" />
+  </Folder>
+  <Folder Name="/CLI/">
+    <Project Path="PackageCascade.Cli/PackageCascade.Cli.csproj" />
+    <Project Path="PackageCascade.Cli.Tests.Unit/PackageCascade.Cli.Tests.Unit.csproj" />
+  </Folder>
   <Project Path="PackageCascade.Tests.Integration/PackageCascade.Tests.Integration.csproj" />
 </Solution>
