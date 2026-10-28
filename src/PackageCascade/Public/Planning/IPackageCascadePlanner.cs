@@ -7,5 +7,5 @@ public interface IPackageCascadePlanner
 	/// <param name="repositoryPath">Path to the Git repository containing the projects.</param>
 	/// <param name="solutionPath">Path to the solution whose packable projects should be planned.</param>
 	/// <returns>The selected releases, effective dependency versions, and build order.</returns>
-	ReleasePlan Generate(string repositoryPath, string solutionPath);
+	public ReleasePlan Generate(string repositoryPath, string solutionPath);
 }
