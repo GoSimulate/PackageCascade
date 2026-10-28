@@ -21,6 +21,7 @@ public sealed class PackageTagReaderTests : IDisposable
 		Commit first = Commit("first");
 		_repository.Tags.Add("Acme.Core-v1.9.0", first);
 		_repository.Tags.Add("Acme.Tools-v0.2.0", first);
+
 		Commit second = Commit("second");
 		_repository.Tags.Add("Acme.Core-v1.10.0", second);
 		_repository.Tags.Add("Acme.Core.Tools-v9.0.0", second);
@@ -42,11 +43,13 @@ public sealed class PackageTagReaderTests : IDisposable
 	{
 		Commit baseline = Commit("baseline");
 		_repository.Tags.Add("Acme.Core-v1.0.0", baseline);
+
 		Branch main = _repository.Head;
 		Branch other = _repository.CreateBranch("other");
 		Commands.Checkout(_repository, other);
 		Commit offBranch = Commit("other branch");
 		_repository.Tags.Add("Acme.Core-v9.0.0", offBranch);
+
 		Commands.Checkout(_repository, main);
 		Commit("main branch");
 
@@ -61,6 +64,7 @@ public sealed class PackageTagReaderTests : IDisposable
 	{
 		Commit first = Commit("first");
 		_repository.Tags.Add("Acme.Core-v1.0.0-rc.2", first);
+
 		Commit second = Commit("second");
 		Signature tagger = new("PackageCascade Tests", "tests@example.invalid", DateTimeOffset.UtcNow);
 		_repository.Tags.Add("Acme.Core-v1.0.0-rc.10", second, tagger, "Release candidate");
@@ -93,6 +97,7 @@ public sealed class PackageTagReaderTests : IDisposable
 	{
 		Commit first = Commit("first");
 		_repository.Tags.Add("Acme.Core-v1.0.0+first", first);
+
 		Commit second = Commit("second");
 		_repository.Tags.Add("Acme.Core-v1.0.0+second", second);
 
@@ -104,8 +109,10 @@ public sealed class PackageTagReaderTests : IDisposable
 	{
 		Commit first = Commit("first");
 		_repository.Tags.Add("Acme.Core-v1.0.0+first", first);
+
 		Commit second = Commit("second");
 		_repository.Tags.Add("Acme.Core-v1.0.0+second", second);
+
 		Commit latest = Commit("latest");
 		_repository.Tags.Add("Acme.Core-v2.0.0", latest);
 
@@ -125,6 +132,7 @@ public sealed class PackageTagReaderTests : IDisposable
 	{
 		string path = Path.Combine(_directory, "file.txt");
 		File.WriteAllText(path, contents);
+
 		Commands.Stage(_repository, "file.txt");
 		Signature author = new("PackageCascade Tests", "tests@example.invalid", DateTimeOffset.UtcNow);
 		return _repository.Commit(contents, author, author);

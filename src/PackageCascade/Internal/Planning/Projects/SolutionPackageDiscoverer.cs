@@ -23,6 +23,7 @@ internal sealed class SolutionPackageDiscoverer : ISolutionPackageDiscoverer
 			.Where(IsPackable)
 			.Select(node => node.ProjectInstance.FullPath)
 			.ToHashSet(pathComparer);
+
 		Dictionary<string, ProjectGraphNode[]> projects = graph.ProjectNodes
 			.Where(node => packablePaths.Contains(node.ProjectInstance.FullPath))
 			.GroupBy(node => node.ProjectInstance.FullPath, pathComparer)

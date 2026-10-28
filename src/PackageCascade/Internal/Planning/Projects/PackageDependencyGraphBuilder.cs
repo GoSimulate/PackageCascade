@@ -11,6 +11,7 @@ internal sealed class PackageDependencyGraphBuilder : IPackageDependencyGraphBui
 		foreach (PackableProject project in projects)
 		{
 			HashSet<PackableProject> directDependencies = new();
+
 			foreach (string referencedPath in project.ReferencedProjectPaths)
 			{
 				if (projectsByPath.TryGetValue(Path.GetFullPath(referencedPath), out PackableProject? dependency))

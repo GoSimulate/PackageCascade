@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
 			services.AddTransient<IDirectoryBumpCalculator, DirectoryBumpCalculator>();
 			services.AddTransient<IPackageBumpCalculator, PackageBumpCalculator>();
 			services.AddTransient<IPackageCascadePlanner, PlanGenerator>();
+
 			return services;
 		}
 	}

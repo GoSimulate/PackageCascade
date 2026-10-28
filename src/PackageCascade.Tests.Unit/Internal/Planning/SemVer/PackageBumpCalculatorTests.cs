@@ -70,6 +70,7 @@ public class PackageBumpCalculatorTests
 			[_foundation] = [],
 			[_unrelated] = [],
 		};
+
 		Dictionary<string, SemverBump> directoryBumps = new()
 		{
 			["src/Application"] = SemverBump.None,
@@ -77,6 +78,7 @@ public class PackageBumpCalculatorTests
 			["src/Foundation"] = SemverBump.None,
 			["src/Unrelated"] = SemverBump.None,
 		};
+
 		foreach ((string directory, SemverBump bump) in changedBumps)
 		{
 			directoryBumps[directory] = bump;

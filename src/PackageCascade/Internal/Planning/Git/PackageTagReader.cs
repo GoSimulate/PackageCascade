@@ -10,6 +10,7 @@ internal sealed class PackageTagReader : IPackageTagReader
 		using Repository repository = new(repositoryPath);
 		Commit head = repository.Head.Tip ?? throw new InvalidOperationException("The repository has no HEAD commit.");
 		Dictionary<string, List<PackageReleaseTag>> tagsByPackage = GetReachableTags(repository, head, packageIds);
+
 		return GetLatestTags(tagsByPackage);
 	}
 
@@ -20,10 +21,12 @@ internal sealed class PackageTagReader : IPackageTagReader
 	{
 		Dictionary<string, List<PackageReleaseTag>> tagsByPackage = packageIds.Distinct(StringComparer.Ordinal)
 			.ToDictionary(packageId => packageId, _ => new List<PackageReleaseTag>(), StringComparer.Ordinal);
+
 		foreach (Tag tag in repository.Tags)
 		{
 			AddReachableMatches(repository, head, tagsByPackage, tag);
 		}
+
 		return tagsByPackage;
 	}
 
@@ -41,6 +44,7 @@ internal sealed class PackageTagReader : IPackageTagReader
 			{
 				continue;
 			}
+
 			if (tag.PeeledTarget is not Commit commit || repository.ObjectDatabase.FindMergeBase(head, commit)?.Id != commit.Id)
 			{
 				continue;
@@ -54,6 +58,7 @@ internal sealed class PackageTagReader : IPackageTagReader
 		IReadOnlyDictionary<string, List<PackageReleaseTag>> tagsByPackage)
 	{
 		Dictionary<string, PackageReleaseTag> latestTags = new(StringComparer.Ordinal);
+
 		foreach ((string packageId, List<PackageReleaseTag> tags) in tagsByPackage)
 		{
 			if (tags.Count > 0)
@@ -61,12 +66,14 @@ internal sealed class PackageTagReader : IPackageTagReader
 				latestTags.Add(packageId, GetLatestTag(packageId, tags));
 			}
 		}
+
 		return latestTags;
 	}
 
 	private static PackageReleaseTag GetLatestTag(string packageId, IReadOnlyList<PackageReleaseTag> tags)
 	{
 		PackageReleaseTag latest = tags.MaxBy(tag => tag.Version, VersionComparer.VersionRelease)!;
+
 		foreach (PackageReleaseTag candidate in tags)
 		{
 			if (VersionComparer.VersionRelease.Compare(candidate.Version, latest.Version) != 0)
@@ -84,6 +91,7 @@ internal sealed class PackageTagReader : IPackageTagReader
 				latest = candidate;
 			}
 		}
+
 		return latest;
 	}
 }

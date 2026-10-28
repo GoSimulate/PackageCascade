@@ -103,6 +103,7 @@ public class SolutionPackageDiscovererTests : IDisposable
 		string projectDirectory = Directory.CreateDirectory(Path.Combine(_directory, name)).FullName;
 		string projectPath = Path.Combine(projectDirectory, name + ".csproj");
 		string referenceItems = string.Join("", references.Select(reference => $"<ProjectReference Include=\"{reference}\" />"));
+
 		File.WriteAllText(projectPath, $"""
 			<Project Sdk="Microsoft.NET.Sdk">
 			  <PropertyGroup>
@@ -112,6 +113,7 @@ public class SolutionPackageDiscovererTests : IDisposable
 			  <ItemGroup>{referenceItems}</ItemGroup>
 			</Project>
 			""");
+
 		return projectPath;
 	}
 }

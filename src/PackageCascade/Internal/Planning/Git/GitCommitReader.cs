@@ -24,6 +24,7 @@ internal sealed class GitCommitReader : IGitCommitReader
 		};
 
 		List<GitCommitDetails> commits = new();
+
 		foreach (Commit commit in repository.Commits.QueryBy(filter))
 		{
 			commits.Add(new(commit.Sha, commit.Message.Trim(), GetChangedPaths(repository, commit)));
@@ -37,12 +38,14 @@ internal sealed class GitCommitReader : IGitCommitReader
 		Commit parent = commit.Parents.First();
 		TreeChanges changes = repository.Diff.Compare<TreeChanges>(parent.Tree, commit.Tree);
 		HashSet<string> changedPaths = new(StringComparer.Ordinal);
+
 		foreach (TreeEntryChanges change in changes)
 		{
 			if (!string.IsNullOrEmpty(change.Path))
 			{
 				changedPaths.Add(change.Path);
 			}
+
 			if (!string.IsNullOrEmpty(change.OldPath))
 			{
 				changedPaths.Add(change.OldPath);

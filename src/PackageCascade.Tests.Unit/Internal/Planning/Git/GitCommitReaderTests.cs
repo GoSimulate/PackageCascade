@@ -60,6 +60,7 @@ public sealed class GitCommitReaderTests : IDisposable
 		string fullPath = Path.Combine(_directory, path);
 		Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
 		File.WriteAllText(fullPath, contents);
+
 		Commands.Stage(_repository, path);
 		Signature author = new("PackageCascade Tests", "tests@example.invalid", DateTimeOffset.UtcNow);
 		return _repository.Commit(message, author, author);
