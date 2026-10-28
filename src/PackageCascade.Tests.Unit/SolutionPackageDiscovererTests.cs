@@ -15,7 +15,8 @@ public class SolutionPackageDiscovererTests : IDisposable
 	public SolutionPackageDiscovererTests()
 	{
 		_defaultProject = WriteProject("Default", "");
-		_explicitProject = WriteProject("Explicit", "<PackageId>Custom.Package</PackageId>", "../Outside/Outside.csproj");
+		_explicitProject = WriteProject("Explicit", "<PackageId>Custom.Package</PackageId>",
+			"../Default/Default.csproj", "../NotPackable/NotPackable.csproj", "../Outside/Outside.csproj");
 		_nonPackableProject = WriteProject("NotPackable", "<IsPackable>false</IsPackable>");
 		_outsideProject = WriteProject("Outside", "");
 
@@ -46,6 +47,36 @@ public class SolutionPackageDiscovererTests : IDisposable
 	}
 
 	[Test]
+	public async Task CapturesDirectProjectReferences()
+	{
+		IReadOnlyList<PackableProject> packages = new SolutionPackageDiscoverer().Discover(_solutionPath);
+
+		await Assert.That(packages.Single(package => package.ProjectPath == _explicitProject).ReferencedProjectPaths)
+			.IsEquivalentTo(new[] { _defaultProject });
+	}
+
+	[Test]
+	public async Task CapturesReferencesConditionedOnTargetFramework()
+	{
+		File.WriteAllText(_explicitProject, """
+			<Project Sdk="Microsoft.NET.Sdk">
+			  <PropertyGroup>
+			    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+			    <PackageId>Custom.Package</PackageId>
+			  </PropertyGroup>
+			  <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
+			    <ProjectReference Include="../Default/Default.csproj" />
+			  </ItemGroup>
+			</Project>
+			""");
+
+		IReadOnlyList<PackableProject> packages = new SolutionPackageDiscoverer().Discover(_solutionPath);
+
+		await Assert.That(packages.Single(package => package.ProjectPath == _explicitProject).ReferencedProjectPaths)
+			.IsEquivalentTo(new[] { _defaultProject });
+	}
+
+	[Test]
 	public async Task ExcludesNonPackableProject()
 	{
 		IReadOnlyList<PackableProject> packages = new SolutionPackageDiscoverer().Discover(_solutionPath);
@@ -66,18 +97,18 @@ public class SolutionPackageDiscovererTests : IDisposable
 		Directory.Delete(_directory, recursive: true);
 	}
 
-	private string WriteProject(string name, string properties, string? reference = null)
+	private string WriteProject(string name, string properties, params string[] references)
 	{
 		string projectDirectory = Directory.CreateDirectory(Path.Combine(_directory, name)).FullName;
 		string projectPath = Path.Combine(projectDirectory, name + ".csproj");
-		string referenceItem = reference is null ? "" : $"<ItemGroup><ProjectReference Include=\"{reference}\" /></ItemGroup>";
+		string referenceItems = string.Join("", references.Select(reference => $"<ProjectReference Include=\"{reference}\" />"));
 		File.WriteAllText(projectPath, $"""
 			<Project Sdk="Microsoft.NET.Sdk">
 			  <PropertyGroup>
 			    <TargetFramework>net11.0</TargetFramework>
 			    {properties}
 			  </PropertyGroup>
-			  {referenceItem}
+			  <ItemGroup>{referenceItems}</ItemGroup>
 			</Project>
 			""");
 		return projectPath;
