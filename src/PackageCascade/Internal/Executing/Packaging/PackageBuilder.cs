@@ -5,17 +5,25 @@ namespace PackageCascade.Internal.Executing.Packaging;
 
 internal sealed class PackageBuilder : IPackageBuilder
 {
+	private readonly IPackageVersionMapWriter _versionMapWriter;
+
+	public PackageBuilder(IPackageVersionMapWriter versionMapWriter)
+	{
+		_versionMapWriter = versionMapWriter;
+	}
+
 	public async Task<IReadOnlyList<string>> Build(PackageBuildInput input, CancellationToken cancellationToken)
 	{
 		string workingDirectory = Path.GetFullPath(input.WorkingDirectory);
 		string outputDirectory = Path.GetFullPath(input.OutputDirectory);
 		Directory.CreateDirectory(outputDirectory);
 
-		using ProjectVersionMap versionMap = new();
-		string versionMapProperty = $"-p:PackageCascadeExecutionId={versionMap.ExecutionId}";
+		string executionId = Guid.NewGuid().ToString("N");
+		string versionMapProperty = $"-p:PackageCascadeExecutionId={executionId}";
 		string configurationProperty = $"-p:Configuration={input.Configuration}";
-		await WriteVersionMap(input.VersionsByProjectPath, versionMap, workingDirectory,
+		PackageVersionMap versionMap = await CreateVersionMap(input.VersionsByProjectPath, executionId, workingDirectory,
 			versionMapProperty, configurationProperty, cancellationToken);
+		await _versionMapWriter.Write(versionMap, cancellationToken);
 
 		foreach (string projectPath in input.ProjectPaths)
 		{
@@ -44,14 +52,16 @@ internal sealed class PackageBuilder : IPackageBuilder
 			.ToArray();
 	}
 
-	private static async Task WriteVersionMap(
+	private static async Task<PackageVersionMap> CreateVersionMap(
 		IReadOnlyDictionary<string, string> versionsByProjectPath,
-		ProjectVersionMap versionMap,
+		string executionId,
 		string workingDirectory,
 		string versionMapProperty,
 		string configurationProperty,
 		CancellationToken cancellationToken)
 	{
+		Dictionary<string, string> versionsByTargetPath = new(
+			OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 		foreach ((string projectPath, string version) in versionsByProjectPath)
 		{
 			string fullPath = Path.GetFullPath(projectPath);
@@ -62,9 +72,14 @@ internal sealed class PackageBuilder : IPackageBuilder
 			{
 				string extensionsPath = (await GetProperty(fullPath, "MSBuildProjectExtensionsPath", workingDirectory,
 					versionMapProperty, configurationProperty, targetFramework, cancellationToken)).Trim();
-				versionMap.Write(fullPath, Path.GetFullPath(extensionsPath, Path.GetDirectoryName(fullPath)!), version);
+				string targetPath = Path.Combine(
+					Path.GetFullPath(extensionsPath, Path.GetDirectoryName(fullPath)!),
+					$"{Path.GetFileName(fullPath)}.packagecascade-{executionId}.targets");
+				versionsByTargetPath.TryAdd(targetPath, version);
 			}
 		}
+
+		return new PackageVersionMap(executionId, versionsByTargetPath);
 	}
 
 	private static async Task EnsureEvaluatedVersions(

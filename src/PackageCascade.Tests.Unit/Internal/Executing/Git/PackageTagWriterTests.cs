@@ -17,19 +17,19 @@ public sealed class PackageTagWriterTests : IDisposable
 	}
 
 	[Test]
-	public async Task CreatesLightweightTagsAtPlanCommitAfterHeadMoves()
+	public async Task CreatesLightweightTagsAtCurrentHead()
 	{
-		Commit target = Commit("target");
-		Commit("new head");
+		Commit("target");
+		Commit head = Commit("new head");
 
-		IReadOnlyList<string> created = _writer.Create(_directory, Plan(target, ("Acme.Core", "1.2.3"), ("Acme.Tools", "2.0.0")));
+		IReadOnlyList<string> created = _writer.Create(_directory, Plan(("Acme.Core", "1.2.3"), ("Acme.Tools", "2.0.0")));
 
 		using (Assert.Multiple())
 		{
 			await Assert.That(created).IsEquivalentTo(new[] { "Acme.Core-v1.2.3", "Acme.Tools-v2.0.0" });
 			await Assert.That(_repository.Tags["Acme.Core-v1.2.3"].Target).IsTypeOf<Commit>();
-			await Assert.That(_repository.Tags["Acme.Core-v1.2.3"].PeeledTarget.Id).IsEqualTo(target.Id);
-			await Assert.That(_repository.Tags["Acme.Tools-v2.0.0"].PeeledTarget.Id).IsEqualTo(target.Id);
+			await Assert.That(_repository.Tags["Acme.Core-v1.2.3"].PeeledTarget.Id).IsEqualTo(head.Id);
+			await Assert.That(_repository.Tags["Acme.Tools-v2.0.0"].PeeledTarget.Id).IsEqualTo(head.Id);
 		}
 	}
 
@@ -37,7 +37,7 @@ public sealed class PackageTagWriterTests : IDisposable
 	public async Task RepeatedCreateThrowsAndKeepsFirstTag()
 	{
 		Commit target = Commit("target");
-		ReleasePlan plan = Plan(target, ("Acme.Core", "1.0.0"));
+		ReleasePlan plan = Plan(("Acme.Core", "1.0.0"));
 		_writer.Create(_directory, plan);
 
 		Assert.Throws(typeof(LibGit2SharpException), () => _writer.Create(_directory, plan));
@@ -53,7 +53,7 @@ public sealed class PackageTagWriterTests : IDisposable
 		_repository.Tags.Add("Acme.Tools-v2.0.0", other);
 
 		Assert.Throws(typeof(LibGit2SharpException), () => _writer.Create(_directory,
-			Plan(target, ("Acme.Core", "1.0.0"), ("Acme.Tools", "2.0.0"))));
+			Plan(("Acme.Core", "1.0.0"), ("Acme.Tools", "2.0.0"))));
 
 		using (Assert.Multiple())
 		{
@@ -68,7 +68,7 @@ public sealed class PackageTagWriterTests : IDisposable
 		Commit target = Commit("target");
 
 		Assert.Throws(typeof(LibGit2SharpException), () => _writer.Create(_directory,
-			Plan(target, ("Acme.Core", "1.0.0"), ("Bad..Name", "2.0.0"))));
+			Plan(("Acme.Core", "1.0.0"), ("Bad..Name", "2.0.0"))));
 
 		await Assert.That(_repository.Tags["Acme.Core-v1.0.0"].PeeledTarget.Id).IsEqualTo(target.Id);
 	}
@@ -81,7 +81,7 @@ public sealed class PackageTagWriterTests : IDisposable
 		File.WriteAllText(lockPath, "held");
 
 		Assert.Throws(typeof(LibGit2SharpException), () => _writer.Create(_directory,
-			Plan(target, ("Acme.Core", "1.0.0"), ("Acme.Tools", "2.0.0"))));
+			Plan(("Acme.Core", "1.0.0"), ("Acme.Tools", "2.0.0"))));
 
 		using (Assert.Multiple())
 		{
@@ -104,6 +104,6 @@ public sealed class PackageTagWriterTests : IDisposable
 		return _repository.Commit(contents, author, author);
 	}
 
-	private static ReleasePlan Plan(Commit target, params (string PackageId, string Version)[] packages)
-		=> new(packages.Select(package => new PlannedRelease(package.PackageId, $"{package.PackageId}.csproj", package.Version, [], [])).ToArray(), target.Sha, "Release", [], ".");
+	private static ReleasePlan Plan(params (string PackageId, string Version)[] packages)
+		=> new(packages.Select(package => new PlannedRelease(package.PackageId, $"{package.PackageId}.csproj", package.Version, [], [])).ToArray(), "Release", [], ".");
 }

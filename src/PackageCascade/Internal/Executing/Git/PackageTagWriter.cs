@@ -8,8 +8,7 @@ internal sealed class PackageTagWriter : IPackageTagWriter
 	public IReadOnlyList<string> Create(string repositoryPath, ReleasePlan plan)
 	{
 		using Repository repository = new(repositoryPath);
-		Commit target = repository.Lookup<Commit>(plan.TargetCommitSha)
-			?? throw new InvalidOperationException($"Target commit '{plan.TargetCommitSha}' was not found.");
+		Commit target = repository.Head.Tip ?? throw new InvalidOperationException("The repository has no HEAD commit.");
 
 		List<string> created = [];
 		foreach (PlannedRelease release in plan.Packages)

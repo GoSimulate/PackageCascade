@@ -2,7 +2,6 @@ using Microsoft.Extensions.DependencyInjection;
 using PackageCascade.Internal.Executing;
 using PackageCascade.Internal.Executing.Git;
 using PackageCascade.Internal.Executing.Packaging;
-using PackageCascade.Internal.Git;
 using PackageCascade.Internal.Planning;
 using PackageCascade.Internal.Planning.Git;
 using PackageCascade.Internal.Planning.Projects;
@@ -23,12 +22,12 @@ public static class ServiceCollectionExtensions
 		{
 			services.AddTransient<ISolutionPackageDiscoverer, SolutionPackageDiscoverer>();
 			services.AddTransient<IGitCommitReader, GitCommitReader>();
-			services.AddTransient<IRepositoryHeadReader, RepositoryHeadReader>();
 			services.AddTransient<IPackageTagReader, PackageTagReader>();
 			services.AddTransient<IPackageDependencyGraphBuilder, PackageDependencyGraphBuilder>();
 			services.AddTransient<IDirectoryBumpCalculator, DirectoryBumpCalculator>();
 			services.AddTransient<IPackageBumpCalculator, PackageBumpCalculator>();
 			services.AddTransient<IPackageCascadePlanner, PlanGenerator>();
+			services.AddTransient<IPackageVersionMapWriter, PackageVersionMapWriter>();
 			services.AddTransient<IPackageBuilder, PackageBuilder>();
 			services.AddTransient<IPackageArchiveVerifier, PackageArchiveVerifier>();
 			services.AddTransient<IPackageTagWriter, PackageTagWriter>();

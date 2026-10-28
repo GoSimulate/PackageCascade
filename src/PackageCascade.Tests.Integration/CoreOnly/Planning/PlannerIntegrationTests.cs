@@ -49,7 +49,6 @@ public sealed class PlannerIntegrationTests : IDisposable
 
 		using (Assert.Multiple())
 		{
-			await Assert.That(plan.TargetCommitSha).IsEqualTo(_repository.Head.Tip!.Sha);
 			await Assert.That(plan.Configuration).IsEqualTo("Release");
 			await Assert.That(release.PackageId).IsEqualTo("Fixture");
 			await Assert.That(release.Version).IsEqualTo("1.2.4");
