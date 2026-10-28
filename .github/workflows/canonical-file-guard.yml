@@ -2,12 +2,12 @@ name: Canonical files
 on:
   pull_request_target:
     paths:
-    - .gitattributes
     - .github/workflows/secret-scan.yml
     - LICENSE
     - CONTRIBUTORS.md
     - .editorconfig
     - .ort/evaluator.rules.kts
+    - .gitattributes
     - .github/workflows/canonical-file-guard.yml
 permissions:
   contents: read
@@ -15,8 +15,44 @@ jobs:
   reject-canonical-file-changes:
     runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
+    - uses: actions/checkout@v7.0.1
+      with:
+        fetch-depth: 0
     - name: Explain canonical file ownership
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
       run: |
-        echo '::error::Canonical files are managed in https://github.com/GoSimulate/github-infra. Make the change there instead.'
+        git ls-files -z > "$RUNNER_TEMP/tracked-files"
+        git check-attr -z --stdin gosim-canonical < "$RUNNER_TEMP/tracked-files" > "$RUNNER_TEMP/file-attributes"
+
+        declare -A canonical=()
+        while IFS= read -r -d '' file && IFS= read -r -d '' attribute && IFS= read -r -d '' value; do
+          if [[ "$value" == set ]]; then
+            canonical["$file"]=1
+          fi
+        done < "$RUNNER_TEMP/file-attributes"
+
+        git fetch --no-tags origin "refs/pull/${PR_NUMBER}/head"
+        if [[ "$(git rev-parse FETCH_HEAD)" != "$HEAD_SHA" ]]; then
+          echo '::error::The pull request changed while this run started. Rerun the guard for the latest revision.'
+          exit 1
+        fi
+        git diff --name-only --no-renames -z "${BASE_SHA}...FETCH_HEAD" -- > "$RUNNER_TEMP/changed-files"
+
+        matches=0
+        while IFS= read -r -d '' file; do
+          if [[ -n "${canonical[$file]+x}" ]]; then
+            escaped=${file//'%'/'%25'}
+            escaped=${escaped//$'\r'/'%0D'}
+            escaped=${escaped//$'\n'/'%0A'}
+            echo "::error::Canonical file changed: ${escaped}. Make the change in https://github.com/GoSimulate/github-infra instead."
+            matches=1
+          fi
+        done < "$RUNNER_TEMP/changed-files"
+        if (( matches == 0 )); then
+          echo '::error::A canonical file changed. Make the change in https://github.com/GoSimulate/github-infra instead.'
+        fi
         exit 1
 ...
