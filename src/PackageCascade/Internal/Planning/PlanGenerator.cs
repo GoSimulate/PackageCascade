@@ -34,9 +34,10 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 
 	public ReleasePlan Generate(
 		string repositoryPath,
-		string solutionPath)
+		string solutionPath,
+		string configuration = "Release")
 	{
-		IReadOnlyList<PackableProject> projects = _packageDiscoverer.Discover(solutionPath);
+		IReadOnlyList<PackableProject> projects = _packageDiscoverer.Discover(solutionPath, configuration);
 		IReadOnlyDictionary<PackableProject, IReadOnlyList<PackableProject>> graph = _graphBuilder.Build(projects);
 		IReadOnlyDictionary<string, PackageReleaseTag> tags = _tagReader.ReadLatest(repositoryPath, projects.Select(project => project.PackageId));
 
@@ -51,7 +52,7 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 		IReadOnlyList<PlannedRelease> packages = CreatePackages(
 			repositoryPath, layers, selected, graph, tags, directChanges, versions);
 
-		return new(packages);
+		return new(packages, _commitReader.ReadHeadSha(repositoryPath), configuration);
 	}
 
 	private Dictionary<PackableProject, DirectChange> GetDirectChanges(

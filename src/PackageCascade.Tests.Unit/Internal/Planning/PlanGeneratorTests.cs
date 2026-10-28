@@ -239,6 +239,25 @@ public sealed class PlanGeneratorTests
 		await Assert.That(JsonSerializer.Serialize(first)).IsEqualTo(JsonSerializer.Serialize(second));
 	}
 
+	[Test]
+	[Arguments("Debug")]
+	[Arguments("Staging")]
+	public async Task IncludesHeadShaAndRequestedConfiguration(string configuration)
+	{
+		StubCommitReader commits = new([]);
+		StubDiscoverer discoverer = new(Graph());
+		PlanGenerator generator = CreateGenerator(discoverer, commits, new Dictionary<string, PackageReleaseTag>());
+
+		ReleasePlan plan = generator.Generate(_repositoryPath, _solutionPath, configuration);
+
+		using (Assert.Multiple())
+		{
+			await Assert.That(plan.TargetCommitSha).IsEqualTo("head-sha");
+			await Assert.That(plan.Configuration).IsEqualTo(configuration);
+			await Assert.That(discoverer.Configuration).IsEqualTo(configuration);
+		}
+	}
+
 	private static ReleasePlan Generate(IReadOnlyList<PackableProject> projects,
 		IReadOnlyDictionary<string, PackageReleaseTag> tags, IReadOnlyList<GitCommitDetails>? commits = null)
 	{
@@ -249,7 +268,11 @@ public sealed class PlanGeneratorTests
 
 	private static PlanGenerator CreateGenerator(IReadOnlyList<PackableProject> projects, IGitCommitReader commits,
 		IReadOnlyDictionary<string, PackageReleaseTag> tags)
-		=> new(new StubDiscoverer(projects), commits, new StubTagReader(tags), new StubGraphBuilder(),
+		=> CreateGenerator(new StubDiscoverer(projects), commits, tags);
+
+	private static PlanGenerator CreateGenerator(StubDiscoverer discoverer, IGitCommitReader commits,
+		IReadOnlyDictionary<string, PackageReleaseTag> tags)
+		=> new(discoverer, commits, new StubTagReader(tags), new StubGraphBuilder(),
 			new StubDirectoryBumpCalculator(), new StubPackageBumpCalculator());
 
 	private static async Task AssertVersions(ReleasePlan plan, params (string PackageId, string Version)[] expected)
@@ -297,10 +320,15 @@ public sealed class PlanGeneratorTests
 	private sealed class StubDiscoverer : ISolutionPackageDiscoverer
 	{
 		private readonly IReadOnlyList<PackableProject> _projects;
+		public string? Configuration { get; private set; }
 
 		public StubDiscoverer(IReadOnlyList<PackableProject> projects) => _projects = projects;
 
-		public IReadOnlyList<PackableProject> Discover(string solutionPath) => _projects;
+		public IReadOnlyList<PackableProject> Discover(string solutionPath, string configuration = "Release")
+		{
+			Configuration = configuration;
+			return _projects;
+		}
 	}
 
 	private sealed class StubTagReader : IPackageTagReader
@@ -322,6 +350,8 @@ public sealed class PlanGeneratorTests
 
 		public IReadOnlyList<GitCommitDetails> ReadSince(string repositoryPath, string baselineCommitHash)
 			=> _commitsByBaseline is null ? _commits : _commitsByBaseline[baselineCommitHash];
+
+		public string ReadHeadSha(string repositoryPath) => "head-sha";
 	}
 
 	private sealed class StubGraphBuilder : IPackageDependencyGraphBuilder
