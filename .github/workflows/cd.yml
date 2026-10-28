@@ -64,6 +64,16 @@ jobs:
           dotnet pack src/PackageCascade.slnx
           -c Release --no-build --no-restore -o artifacts/packages
           -p:Version="$VERSION" -p:ContinuousIntegrationBuild=true -p:RepositoryUrl="$REPOSITORY_URL"
+      - name: Publish Linux CLI
+        run: |
+          dotnet publish src/PackageCascade.Cli/PackageCascade.Cli.csproj \
+            -c Release -r linux-x64 --self-contained true -o artifacts/cli \
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:DebugType=embedded \
+            -p:Version="$VERSION" -p:ContinuousIntegrationBuild=true -p:RepositoryUrl="$REPOSITORY_URL"
+          mv artifacts/cli/PackageCascade.Cli artifacts/cli/PackageCascade-linux-x64
+      - name: Check Linux CLI
+        run: artifacts/cli/PackageCascade-linux-x64 --help
       - name: Generate release notes
         id: notes
         uses: requarks/changelog-action@v1.10.3
@@ -102,7 +112,7 @@ jobs:
           tag: ${{ needs.version.outputs.next }}
           commit: ${{ github.sha }}
           body: ${{ steps.notes.outputs.changes }}
-          artifacts: artifacts/packages/*.nupkg,artifacts/packages/*.snupkg
+          artifacts: artifacts/packages/*.nupkg,artifacts/packages/*.snupkg,artifacts/cli/PackageCascade-linux-x64
           artifactErrorsFailBuild: true
           makeLatest: true
       - uses: actions/upload-artifact@v7.0.2
