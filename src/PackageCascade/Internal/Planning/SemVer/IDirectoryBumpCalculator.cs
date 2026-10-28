@@ -1,0 +1,8 @@
+using PackageCascade.Internal.Planning.Git;
+using PackageCascade.Public.Planning;
+namespace PackageCascade.Internal.Planning.SemVer;
+
+internal interface IDirectoryBumpCalculator
+{
+	Dictionary<string, SemverBump> Calculate(IEnumerable<GitCommitDetails> commits, IEnumerable<string> directories);
+}

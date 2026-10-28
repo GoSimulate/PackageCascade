@@ -1,7 +1,8 @@
+using PackageCascade.Internal.Planning.Git;
 using LibGit2Sharp;
 using PackageCascade.Internal.Planning;
 
-namespace PackageCascade.Tests.Unit;
+namespace PackageCascade.Tests.Unit.Internal.Planning.Git;
 
 public sealed class GitCommitReaderTests : IDisposable
 {
@@ -11,7 +12,7 @@ public sealed class GitCommitReaderTests : IDisposable
 	public GitCommitReaderTests()
 	{
 		Repository.Init(_directory);
-		_repository = new Repository(_directory);
+		_repository = new(_directory);
 	}
 
 	[Test]
