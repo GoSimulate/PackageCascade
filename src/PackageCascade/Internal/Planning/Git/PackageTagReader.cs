@@ -19,8 +19,8 @@ internal sealed class PackageTagReader : IPackageTagReader
 		Commit head,
 		IEnumerable<string> packageIds)
 	{
-		Dictionary<string, List<PackageReleaseTag>> tagsByPackage = packageIds.Distinct(StringComparer.Ordinal)
-			.ToDictionary(packageId => packageId, _ => new List<PackageReleaseTag>(), StringComparer.Ordinal);
+		Dictionary<string, List<PackageReleaseTag>> tagsByPackage = packageIds.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(packageId => packageId, _ => new List<PackageReleaseTag>(), StringComparer.OrdinalIgnoreCase);
 
 		foreach (Tag tag in repository.Tags)
 		{
@@ -39,7 +39,7 @@ internal sealed class PackageTagReader : IPackageTagReader
 		foreach ((string packageId, List<PackageReleaseTag> tags) in tagsByPackage)
 		{
 			string prefix = packageId + "-v";
-			if (!tag.FriendlyName.StartsWith(prefix, StringComparison.Ordinal)
+			if (!tag.FriendlyName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
 				|| !NuGetVersion.TryParseStrict(tag.FriendlyName[prefix.Length..], out NuGetVersion? version))
 			{
 				continue;
@@ -57,7 +57,7 @@ internal sealed class PackageTagReader : IPackageTagReader
 	private static Dictionary<string, PackageReleaseTag> GetLatestTags(
 		IReadOnlyDictionary<string, List<PackageReleaseTag>> tagsByPackage)
 	{
-		Dictionary<string, PackageReleaseTag> latestTags = new(StringComparer.Ordinal);
+		Dictionary<string, PackageReleaseTag> latestTags = new(StringComparer.OrdinalIgnoreCase);
 
 		foreach ((string packageId, List<PackageReleaseTag> tags) in tagsByPackage)
 		{
