@@ -35,8 +35,11 @@ public sealed class GitCommitReaderTests : IDisposable
 
 		GitCommitDetails commit = new GitCommitReader().ReadSince(_directory, baseline.Sha).Single();
 
-		await Assert.That(commit.Message).IsEqualTo("feat: change A\n\nBREAKING CHANGE: API changed");
-		await Assert.That(commit.ChangedPaths.Single()).IsEqualTo("src/A/file.txt");
+		using (Assert.Multiple())
+		{
+			await Assert.That(commit.Message).IsEqualTo("feat: change A\n\nBREAKING CHANGE: API changed");
+			await Assert.That(commit.ChangedPaths.Single()).IsEqualTo("src/A/file.txt");
+		}
 	}
 
 	[Test]
