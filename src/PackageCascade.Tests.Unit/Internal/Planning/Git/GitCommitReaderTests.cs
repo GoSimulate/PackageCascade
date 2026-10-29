@@ -22,7 +22,7 @@ public sealed class GitCommitReaderTests : IDisposable
 		Commit first = Commit("fix: change A", "src/A/file.txt", "second");
 		Commit second = Commit("feat: add B", "src/B/file.txt", "third");
 
-		IReadOnlyList<GitCommitDetails> commits = new GitCommitReader().ReadSince(_directory, baseline.Sha);
+		IReadOnlyList<GitCommitDetails> commits = new GitCommitReader().ReadSince(_directory, baseline.Sha, "src");
 
 		await Assert.That(commits.Select(commit => commit.Sha).SequenceEqual([first.Sha, second.Sha])).IsTrue();
 	}
@@ -33,7 +33,7 @@ public sealed class GitCommitReaderTests : IDisposable
 		Commit baseline = Commit("chore: baseline", "src/A/file.txt", "first");
 		Commit("feat: change A\n\nBREAKING CHANGE: API changed", "src/A/file.txt", "second");
 
-		GitCommitDetails commit = new GitCommitReader().ReadSince(_directory, baseline.Sha).Single();
+		GitCommitDetails commit = new GitCommitReader().ReadSince(_directory, baseline.Sha, "src").Single();
 
 		using (Assert.Multiple())
 		{
@@ -47,9 +47,27 @@ public sealed class GitCommitReaderTests : IDisposable
 	{
 		Commit baseline = Commit("chore: baseline", "src/A/file.txt", "first");
 
-		IReadOnlyList<GitCommitDetails> commits = new GitCommitReader().ReadSince(_directory, baseline.Sha);
+		IReadOnlyList<GitCommitDetails> commits = new GitCommitReader().ReadSince(_directory, baseline.Sha, "src");
 
 		await Assert.That(commits).IsEmpty();
+	}
+
+	[Test]
+	public async Task TracksEffectiveGlobalJsonBeforeAndAfterEachCommit()
+	{
+		Commit baseline = Commit("chore: baseline", "global.json", "root");
+		Commit("build!: change root SDK", "global.json", "updated root");
+		Commit("chore: add nested SDK", "solutions/nested/global.json", "nested");
+		Commit("build: change shadowed root SDK", "global.json", "shadowed root");
+		File.Delete(Path.Combine(_directory, "solutions", "nested", "global.json"));
+		Commands.Stage(_repository, "solutions/nested/global.json");
+		Signature author = new("PackageCascade Tests", "tests@example.invalid", DateTimeOffset.UtcNow);
+		_repository.Commit("chore: remove nested SDK", author, author);
+
+		IReadOnlyList<GitCommitDetails> commits = new GitCommitReader().ReadSince(_directory, baseline.Sha, "solutions/nested");
+
+		await Assert.That(commits.Select(commit => commit.ChangesEffectiveGlobalJson)
+			.SequenceEqual([true, true, false, true])).IsTrue();
 	}
 
 	public void Dispose()

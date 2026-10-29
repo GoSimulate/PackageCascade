@@ -4,8 +4,9 @@ namespace PackageCascade.Internal.Planning.Git;
 
 internal sealed class GitCommitReader : IGitCommitReader
 {
-	public IReadOnlyList<GitCommitDetails> ReadSince(string repositoryPath, string baselineCommitHash)
+	public IReadOnlyList<GitCommitDetails> ReadSince(string repositoryPath, string baselineCommitHash, string solutionDirectory)
 	{
+		IReadOnlyList<string> globalJsonPaths = GetGlobalJsonPaths(solutionDirectory);
 		using Repository repository = new(repositoryPath);
 		Commit head = repository.Head.Tip ?? throw new InvalidOperationException("The repository has no HEAD commit.");
 		Commit baseline = repository.Lookup<Commit>(baselineCommitHash)
@@ -27,15 +28,49 @@ internal sealed class GitCommitReader : IGitCommitReader
 
 		foreach (Commit commit in repository.Commits.QueryBy(filter))
 		{
-			commits.Add(new(commit.Sha, commit.Message.Trim(), GetChangedPaths(repository, commit)));
+			Commit parent = commit.Parents.First();
+			IReadOnlyList<string> changedPaths = GetChangedPaths(repository, parent, commit);
+			string? previousGlobalJson = FindGlobalJson(parent.Tree, globalJsonPaths);
+			string? currentGlobalJson = FindGlobalJson(commit.Tree, globalJsonPaths);
+			commits.Add(new(commit.Sha, commit.Message.Trim(), changedPaths)
+			{
+				ChangesEffectiveGlobalJson = (previousGlobalJson is not null && changedPaths.Contains(previousGlobalJson))
+					|| (currentGlobalJson is not null && changedPaths.Contains(currentGlobalJson)),
+			});
 		}
 
 		return commits;
 	}
 
-	private static IReadOnlyList<string> GetChangedPaths(Repository repository, Commit commit)
+	private static IReadOnlyList<string> GetGlobalJsonPaths(string solutionDirectory)
 	{
-		Commit parent = commit.Parents.First();
+		if (solutionDirectory == ".." || solutionDirectory.StartsWith("../", StringComparison.Ordinal))
+		{
+			return [];
+		}
+
+		List<string> paths = [];
+		string directory = solutionDirectory is "." or "" ? "" : solutionDirectory.TrimEnd('/');
+		while (true)
+		{
+			paths.Add(directory.Length == 0 ? "global.json" : directory + "/global.json");
+			if (directory.Length == 0)
+			{
+				return paths;
+			}
+
+			int separator = directory.LastIndexOf('/');
+			directory = separator < 0 ? "" : directory[..separator];
+		}
+	}
+
+	private static string? FindGlobalJson(Tree tree, IEnumerable<string> paths)
+	{
+		return paths.FirstOrDefault(path => tree[path]?.Target is Blob);
+	}
+
+	private static IReadOnlyList<string> GetChangedPaths(Repository repository, Commit parent, Commit commit)
+	{
 		TreeChanges changes = repository.Diff.Compare<TreeChanges>(parent.Tree, commit.Tree);
 		HashSet<string> changedPaths = new(StringComparer.Ordinal);
 

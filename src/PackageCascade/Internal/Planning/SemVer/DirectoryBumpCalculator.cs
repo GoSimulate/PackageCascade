@@ -7,7 +7,7 @@ namespace PackageCascade.Internal.Planning.SemVer;
 internal sealed partial class DirectoryBumpCalculator : IDirectoryBumpCalculator
 {
 	public Dictionary<string, SemverBump> Calculate(IEnumerable<GitCommitDetails> commits, IEnumerable<string> directories,
-		string solutionDirectory, IReadOnlySet<string> globalJsonPaths)
+		string solutionDirectory)
 	{
 		Dictionary<string, SemverBump> bumps = new(StringComparer.Ordinal);
 		Dictionary<string, string> directoryPrefixes = new(StringComparer.Ordinal);
@@ -22,7 +22,8 @@ internal sealed partial class DirectoryBumpCalculator : IDirectoryBumpCalculator
 		foreach (GitCommitDetails commit in commits)
 		{
 			SemverBump bump = GetBump(commit.Message);
-			bool changesSharedFile = commit.ChangedPaths.Any(path => IsSolutionSharedFile(path, solutionPrefix) || globalJsonPaths.Contains(path));
+			bool changesSharedFile = commit.ChangesEffectiveGlobalJson
+				|| commit.ChangedPaths.Any(path => IsSolutionSharedFile(path, solutionPrefix));
 			if (changesSharedFile && bump < SemverBump.Patch)
 			{
 				bump = SemverBump.Patch;
