@@ -66,7 +66,34 @@ internal sealed class GitCommitReader : IGitCommitReader
 
 	private static string? FindGlobalJson(Tree tree, IEnumerable<string> paths)
 	{
-		return paths.FirstOrDefault(path => tree[path]?.Target is Blob);
+		StringComparer pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+		foreach (string path in paths)
+		{
+			Tree? directory = tree;
+			List<string> trackedSegments = [];
+			string[] segments = path.Split('/');
+			foreach (string segment in segments[..^1])
+			{
+				TreeEntry? entry = directory?.FirstOrDefault(candidate => pathComparer.Equals(candidate.Name, segment));
+				if (entry?.Target is not Tree child)
+				{
+					directory = null;
+					break;
+				}
+
+				trackedSegments.Add(entry.Name);
+				directory = child;
+			}
+
+			TreeEntry? globalJson = directory?.FirstOrDefault(entry => pathComparer.Equals(entry.Name, segments[^1]));
+			if (globalJson?.Target is Blob)
+			{
+				trackedSegments.Add(globalJson.Name);
+				return string.Join('/', trackedSegments);
+			}
+		}
+
+		return null;
 	}
 
 	private static IReadOnlyList<string> GetChangedPaths(Repository repository, Commit parent, Commit commit)

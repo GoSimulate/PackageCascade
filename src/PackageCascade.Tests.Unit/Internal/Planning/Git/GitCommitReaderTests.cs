@@ -70,6 +70,21 @@ public sealed class GitCommitReaderTests : IDisposable
 			.SequenceEqual([true, true, false, true])).IsTrue();
 	}
 
+	[Test]
+	public async Task MatchesSolutionDirectoryCasingAccordingToPlatform()
+	{
+		Commit("chore: add root SDK", "global.json", "root");
+		Commit baseline = Commit("chore: add nested SDK", "solutions/nested/global.json", "nested");
+		Commit("build: change nested SDK", "solutions/nested/global.json", "updated nested");
+		Commit("build: change root SDK", "global.json", "updated root");
+
+		IReadOnlyList<GitCommitDetails> commits = new GitCommitReader()
+			.ReadSince(_directory, baseline.Sha, "Solutions/Nested");
+
+		bool[] expected = OperatingSystem.IsWindows() ? [true, false] : [false, true];
+		await Assert.That(commits.Select(commit => commit.ChangesEffectiveGlobalJson).SequenceEqual(expected)).IsTrue();
+	}
+
 	public void Dispose()
 	{
 		_repository.Dispose();
