@@ -318,6 +318,19 @@ public sealed class PlanGeneratorTests
 		await Assert.That(plan.WorkingDirectory).IsEqualTo("solutions/nested");
 	}
 
+	[Test]
+	public async Task PassesSolutionDirectoryToBumpCalculator()
+	{
+		StubDirectoryBumpCalculator calculator = new();
+		PlanGenerator generator = CreateGenerator(new StubDiscoverer(Graph()),
+			new StubCommitReader([Commit("change", "fix: update settings", "solutions/Directory.Build.props")]),
+			Tags(), calculator);
+
+		generator.Generate(_repositoryPath, Path.Combine(_repositoryPath, "solutions", "Packages.slnx"));
+
+		await Assert.That(calculator.SolutionDirectory).IsEqualTo("solutions");
+	}
+
 	private static ReleasePlan Generate(IReadOnlyList<PackableProject> projects,
 		IReadOnlyDictionary<string, PackageReleaseTag> tags, IReadOnlyList<GitCommitDetails>? commits = null)
 	{
@@ -331,9 +344,9 @@ public sealed class PlanGeneratorTests
 		=> CreateGenerator(new StubDiscoverer(projects), commits, tags);
 
 	private static PlanGenerator CreateGenerator(StubDiscoverer discoverer, IGitCommitReader commits,
-		IReadOnlyDictionary<string, PackageReleaseTag> tags)
+		IReadOnlyDictionary<string, PackageReleaseTag> tags, IDirectoryBumpCalculator? directoryCalculator = null)
 		=> new(discoverer, commits, new StubTagReader(tags), new StubGraphBuilder(),
-			new StubDirectoryBumpCalculator(), new StubPackageBumpCalculator());
+			directoryCalculator ?? new StubDirectoryBumpCalculator(), new StubPackageBumpCalculator());
 
 	private static async Task AssertVersions(ReleasePlan plan, params (string PackageId, string Version)[] expected)
 	{
@@ -425,8 +438,12 @@ public sealed class PlanGeneratorTests
 
 	private sealed class StubDirectoryBumpCalculator : IDirectoryBumpCalculator
 	{
-		public Dictionary<string, SemverBump> Calculate(IEnumerable<GitCommitDetails> commits, IEnumerable<string> directories)
+		public string? SolutionDirectory { get; private set; }
+
+		public Dictionary<string, SemverBump> Calculate(IEnumerable<GitCommitDetails> commits, IEnumerable<string> directories,
+			string solutionDirectory)
 		{
+			SolutionDirectory = solutionDirectory;
 			Dictionary<string, SemverBump> bumps = directories.ToDictionary(directory => directory,
 				_ => SemverBump.None, StringComparer.Ordinal);
 

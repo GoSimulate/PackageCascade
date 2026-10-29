@@ -86,7 +86,7 @@ Each package has its own release history, tracked by tags named `<PackageId>-v<v
 - `fix:` and `perf:` changes require a Patch bump; `feat:` requires Minor. A conventional commit with `!` or a `BREAKING CHANGE:` footer requires Major.
 - Changes are attributed by project directory. When several commits affect a package, the strongest bump wins.
 - If B changes and A depends on B, A gets at least a Patch bump, propagating through its dependants. A's own Minor or Major change takes precedence.
-- A change to root-level `Directory.Build.props`, `Directory.Build.targets`, `Directory.Packages.props`, `global.json`, or `NuGet.Config` affects every package, with Patch as the minimum even for `build:` or `chore:` commits. Nested files retain ordinary directory-based handling.
+- A change to `Directory.Build.props`, `Directory.Build.targets`, `Directory.Packages.props`, `global.json`, or `NuGet.Config` beside the solution file affects every package, with Patch as the minimum even for `build:` or `chore:` commits. Files with those names elsewhere retain ordinary directory-based handling.
 
 For example, a feature in B can release B from `1.4.0` to `1.5.0` and its unchanged dependant A from `3.2.0` to `3.2.1`. A's package then refers to B at `1.5.0`, rather than inheriting A's version.
 
