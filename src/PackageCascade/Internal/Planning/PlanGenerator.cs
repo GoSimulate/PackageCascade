@@ -106,7 +106,7 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 
 			if (!commitsByBaseline.TryGetValue(tag.CommitSha, out IReadOnlyList<GitCommitDetails>? commits))
 			{
-				commits = _commitReader.ReadSince(repositoryPath, tag.CommitSha);
+				commits = _commitReader.ReadSince(repositoryPath, tag.CommitSha, solutionDirectory);
 				commitsByBaseline.Add(tag.CommitSha, commits);
 			}
 

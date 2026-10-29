@@ -319,6 +319,27 @@ public sealed class PlanGeneratorTests
 	}
 
 	[Test]
+	public async Task EffectiveGlobalJsonChangeBumpsEveryPackage()
+	{
+		GitCommitDetails change = Commit("sdk-change", "build: change SDK", "global.json") with
+		{
+			ChangesEffectiveGlobalJson = true,
+		};
+		PlanGenerator generator = new(new StubDiscoverer([Project("A"), Project("B")]),
+			new StubCommitReader([change]), new StubTagReader(Tags()), new StubGraphBuilder(),
+			new DirectoryBumpCalculator(), new StubPackageBumpCalculator());
+
+		ReleasePlan plan = generator.Generate(_repositoryPath, _solutionPath);
+
+		using (Assert.Multiple())
+		{
+			await AssertVersions(plan, ("A", "1.2.4"), ("B", "2.3.5"));
+			await AssertCommitReason(plan, "A", SemverBump.Patch, "sdk-change");
+			await AssertCommitReason(plan, "B", SemverBump.Patch, "sdk-change");
+		}
+	}
+
+	[Test]
 	public async Task PassesSolutionDirectoryToBumpCalculator()
 	{
 		StubDirectoryBumpCalculator calculator = new();
@@ -421,7 +442,7 @@ public sealed class PlanGeneratorTests
 		public StubCommitReader(IReadOnlyList<GitCommitDetails> commits) => _commits = commits;
 		public StubCommitReader(IReadOnlyDictionary<string, IReadOnlyList<GitCommitDetails>> commitsByBaseline) => _commitsByBaseline = commitsByBaseline;
 
-		public IReadOnlyList<GitCommitDetails> ReadSince(string repositoryPath, string baselineCommitHash)
+		public IReadOnlyList<GitCommitDetails> ReadSince(string repositoryPath, string baselineCommitHash, string solutionDirectory)
 			=> _commitsByBaseline is null ? _commits : _commitsByBaseline[baselineCommitHash];
 	}
 

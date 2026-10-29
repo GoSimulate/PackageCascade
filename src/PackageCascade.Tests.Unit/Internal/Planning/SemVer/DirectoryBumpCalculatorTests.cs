@@ -15,7 +15,10 @@ public class DirectoryBumpCalculatorTests
 	[Arguments("NuGet.Config")]
 	public async Task RootSharedFileChangeBumpsEveryDirectory(string path)
 	{
-		GitCommitDetails commit = new("commit", "build: update shared settings", [path]);
+		GitCommitDetails commit = new("commit", "build: update shared settings", [path])
+		{
+			ChangesEffectiveGlobalJson = path == "global.json",
+		};
 
 		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], ["src/A", "tools/B"], ".");
 
@@ -34,7 +37,10 @@ public class DirectoryBumpCalculatorTests
 	[Arguments("NuGet.Config")]
 	public async Task SolutionSharedFileChangeBumpsEveryDirectory(string filename)
 	{
-		GitCommitDetails commit = new("commit", "build: update shared settings", ["src/" + filename]);
+		GitCommitDetails commit = new("commit", "build: update shared settings", ["src/" + filename])
+		{
+			ChangesEffectiveGlobalJson = filename == "global.json",
+		};
 
 		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate(
 			[commit], ["src/A", "src/B"], "src");
@@ -119,7 +125,7 @@ public class DirectoryBumpCalculatorTests
 	{
 		GitCommitDetails[] commits =
 		[
-			new("shared", "feat: enable shared feature", ["global.json"]),
+			new("shared", "feat: enable shared feature", ["global.json"]) { ChangesEffectiveGlobalJson = true },
 			new("package", "feat!: change A API", ["src/A/Api.cs"]),
 		];
 
