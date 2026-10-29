@@ -37,13 +37,15 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 		string solutionPath,
 		string configuration = "Release")
 	{
-		string solutionDirectory = Path.GetRelativePath(repositoryPath, Path.GetDirectoryName(Path.GetFullPath(solutionPath))!)
+		string solutionPathDirectory = Path.GetDirectoryName(Path.GetFullPath(solutionPath))!;
+		string solutionDirectory = Path.GetRelativePath(repositoryPath, solutionPathDirectory)
 			.Replace('\\', '/');
+		IReadOnlySet<string> globalJsonPaths = GetRelevantGlobalJsonPaths(repositoryPath, solutionPathDirectory);
 		IReadOnlyList<PackableProject> projects = _packageDiscoverer.Discover(solutionPath, configuration);
 		IReadOnlyDictionary<PackableProject, IReadOnlyList<PackableProject>> graph = _graphBuilder.Build(projects);
 		IReadOnlyDictionary<string, PackageReleaseTag> tags = _tagReader.ReadLatest(repositoryPath, projects.Select(project => project.PackageId));
 
-		Dictionary<PackableProject, DirectChange> directChanges = GetDirectChanges(repositoryPath, solutionDirectory, projects, tags);
+		Dictionary<PackableProject, DirectChange> directChanges = GetDirectChanges(repositoryPath, solutionDirectory, globalJsonPaths, projects, tags);
 		Dictionary<string, SemverBump> directoryBumps = directChanges.ToDictionary(entry => GetDirectory(repositoryPath, entry.Key), entry => entry.Value.Bump, StringComparer.Ordinal);
 		IReadOnlyDictionary<PackableProject, SemverBump> bumps = _bumpCalculator.Calculate(repositoryPath, graph, directoryBumps);
 
@@ -56,6 +58,31 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 
 		IReadOnlyList<ReferencedPackage> referencedPackages = GetReferencedPackages(repositoryPath, selected, graph, tags);
 		return new(packages, configuration, referencedPackages, solutionDirectory);
+	}
+
+	private static IReadOnlySet<string> GetRelevantGlobalJsonPaths(string repositoryPath, string solutionDirectory)
+	{
+		string repositoryRoot = Path.GetFullPath(repositoryPath);
+		StringComparison pathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+		HashSet<string> paths = new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+		for (string? directory = solutionDirectory; directory is not null; directory = Path.GetDirectoryName(directory))
+		{
+			string relativeDirectory = Path.GetRelativePath(repositoryRoot, directory);
+			if (relativeDirectory == ".." || relativeDirectory.StartsWith(".." + Path.DirectorySeparatorChar, pathComparison))
+			{
+				break;
+			}
+
+			// A nearer file can be added or removed, changing which SDK configuration applies.
+			string path = Path.Combine(directory, "global.json");
+			paths.Add(Path.GetRelativePath(repositoryRoot, path).Replace('\\', '/'));
+			if (File.Exists(path))
+			{
+				break;
+			}
+		}
+
+		return paths;
 	}
 
 	private static IReadOnlyList<ReferencedPackage> GetReferencedPackages(
@@ -90,6 +117,7 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 	private Dictionary<PackableProject, DirectChange> GetDirectChanges(
 		string repositoryPath,
 		string solutionDirectory,
+		IReadOnlySet<string> globalJsonPaths,
 		IEnumerable<PackableProject> projects,
 		IReadOnlyDictionary<string, PackageReleaseTag> tags)
 	{
@@ -110,20 +138,21 @@ internal sealed class PlanGenerator : IPackageCascadePlanner
 				commitsByBaseline.Add(tag.CommitSha, commits);
 			}
 
-			changes.Add(project, GetDirectChange(commits, GetDirectory(repositoryPath, project), solutionDirectory));
+			changes.Add(project, GetDirectChange(commits, GetDirectory(repositoryPath, project), solutionDirectory, globalJsonPaths));
 		}
 
 		return changes;
 	}
 
-	private DirectChange GetDirectChange(IEnumerable<GitCommitDetails> commits, string directory, string solutionDirectory)
+	private DirectChange GetDirectChange(IEnumerable<GitCommitDetails> commits, string directory, string solutionDirectory,
+		IReadOnlySet<string> globalJsonPaths)
 	{
 		SemverBump strongestBump = SemverBump.None;
 		List<string> commitShas = [];
 
 		foreach (GitCommitDetails commit in commits)
 		{
-			SemverBump bump = _directoryCalculator.Calculate([commit], [directory], solutionDirectory)[directory];
+			SemverBump bump = _directoryCalculator.Calculate([commit], [directory], solutionDirectory, globalJsonPaths)[directory];
 			if (bump == SemverBump.None)
 			{
 				continue;

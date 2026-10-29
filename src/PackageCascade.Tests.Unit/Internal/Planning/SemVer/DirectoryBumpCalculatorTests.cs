@@ -7,6 +7,9 @@ namespace PackageCascade.Tests.Unit.Internal.Planning.SemVer;
 
 public class DirectoryBumpCalculatorTests
 {
+	private static readonly IReadOnlySet<string> _rootGlobalJson = new HashSet<string> { "global.json" };
+	private static readonly IReadOnlySet<string> _solutionGlobalJson = new HashSet<string> { "src/global.json" };
+
 	[Test]
 	[Arguments("Directory.Build.props")]
 	[Arguments("Directory.Build.targets")]
@@ -17,7 +20,7 @@ public class DirectoryBumpCalculatorTests
 	{
 		GitCommitDetails commit = new("commit", "build: update shared settings", [path]);
 
-		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], ["src/A", "tools/B"], ".");
+		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], ["src/A", "tools/B"], ".", _rootGlobalJson);
 
 		using (Assert.Multiple())
 		{
@@ -37,7 +40,7 @@ public class DirectoryBumpCalculatorTests
 		GitCommitDetails commit = new("commit", "build: update shared settings", ["src/" + filename]);
 
 		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate(
-			[commit], ["src/A", "src/B"], "src");
+			[commit], ["src/A", "src/B"], "src", _solutionGlobalJson);
 
 		using (Assert.Multiple())
 		{
@@ -52,7 +55,7 @@ public class DirectoryBumpCalculatorTests
 		GitCommitDetails commit = new("commit", "build: update shared settings", ["Directory.Build.props"]);
 
 		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate(
-			[commit], ["src/A", "src/B"], "src");
+			[commit], ["src/A", "src/B"], "src", _solutionGlobalJson);
 
 		using (Assert.Multiple())
 		{
@@ -70,7 +73,7 @@ public class DirectoryBumpCalculatorTests
 	{
 		GitCommitDetails commit = new("commit", message, ["Directory.Build.props"]);
 
-		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], ["src/A", "src/B"], ".");
+		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], ["src/A", "src/B"], ".", _rootGlobalJson);
 
 		using (Assert.Multiple())
 		{
@@ -89,7 +92,7 @@ public class DirectoryBumpCalculatorTests
 	{
 		GitCommitDetails commit = new("commit", "fix: correct settings", [path]);
 
-		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], ["src/A", "src/B"], ".");
+		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], ["src/A", "src/B"], ".", _rootGlobalJson);
 
 		using (Assert.Multiple())
 		{
@@ -107,7 +110,7 @@ public class DirectoryBumpCalculatorTests
 	{
 		GitCommitDetails commit = new("commit", "fix: update repository file", [path]);
 
-		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], ["src/A"], ".");
+		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], ["src/A"], ".", _rootGlobalJson);
 
 		await Assert.That(bumps["src/A"]).IsEqualTo(SemverBump.None);
 	}
@@ -124,7 +127,7 @@ public class DirectoryBumpCalculatorTests
 		];
 
 		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate(
-			reverseOrder ? commits.Reverse() : commits, ["src/A", "src/B"], ".");
+			reverseOrder ? commits.Reverse() : commits, ["src/A", "src/B"], ".", _rootGlobalJson);
 
 		using (Assert.Multiple())
 		{
@@ -144,7 +147,7 @@ public class DirectoryBumpCalculatorTests
 	{
 		GitCommitDetails commit = new("commit", message, ["src/A/file.txt"]);
 
-		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], ["src/A"], ".");
+		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], ["src/A"], ".", _rootGlobalJson);
 
 		await Assert.That(bumps["src/A"].ToString()).IsEqualTo(expected);
 	}
@@ -158,7 +161,7 @@ public class DirectoryBumpCalculatorTests
 			new("second", "fix: repair", ["src/A/fix.cs"]),
 		];
 
-		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate(commits, ["src/A"], ".");
+		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate(commits, ["src/A"], ".", _rootGlobalJson);
 
 		await Assert.That(bumps["src/A"]).IsEqualTo(SemverBump.Minor);
 	}
@@ -168,7 +171,7 @@ public class DirectoryBumpCalculatorTests
 	{
 		GitCommitDetails commit = new("commit", "feat: add feature", ["src/AB/file.cs"]);
 
-		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], ["src/A"], ".");
+		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], ["src/A"], ".", _rootGlobalJson);
 
 		await Assert.That(bumps["src/A"]).IsEqualTo(SemverBump.None);
 	}
@@ -178,7 +181,7 @@ public class DirectoryBumpCalculatorTests
 	{
 		GitCommitDetails commit = new("commit", "fix: repair", ["Api.cs"]);
 
-		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], ["."], ".");
+		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], ["."], ".", _rootGlobalJson);
 
 		await Assert.That(bumps["."]).IsEqualTo(SemverBump.Patch);
 	}
@@ -188,7 +191,7 @@ public class DirectoryBumpCalculatorTests
 	{
 		GitCommitDetails commit = new("commit", "fix: repair", ["src/A/file.cs"]);
 
-		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], [@"src\A"], ".");
+		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate([commit], [@"src\A"], ".", _rootGlobalJson);
 
 		await Assert.That(bumps[@"src\A"]).IsEqualTo(SemverBump.Patch);
 	}
@@ -202,7 +205,7 @@ public class DirectoryBumpCalculatorTests
 			new("second", "fix: repair B", ["src/B/file.cs"]),
 		];
 
-		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate(commits, ["src/A", "src/B", "src/C"], ".");
+		Dictionary<string, SemverBump> bumps = new DirectoryBumpCalculator().Calculate(commits, ["src/A", "src/B", "src/C"], ".", _rootGlobalJson);
 
 		using (Assert.Multiple())
 		{

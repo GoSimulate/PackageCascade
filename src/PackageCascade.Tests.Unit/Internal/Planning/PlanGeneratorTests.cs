@@ -319,6 +319,55 @@ public sealed class PlanGeneratorTests
 	}
 
 	[Test]
+	[Arguments(false, "solutions/nested/global.json", true)]
+	[Arguments(false, "global.json", true)]
+	[Arguments(true, "solutions/nested/global.json", true)]
+	[Arguments(true, "global.json", false)]
+	public async Task OnlyGlobalJsonThatCanSelectTheSolutionSdkBumpsEveryPackage(
+		bool nestedGlobalJsonExists, string changedPath, bool releasesPackages)
+	{
+		string repositoryPath = Directory.CreateTempSubdirectory("packagecascade-global-json-").FullName;
+		try
+		{
+			File.WriteAllText(Path.Combine(repositoryPath, "global.json"), "{}");
+			string solutionDirectory = Directory.CreateDirectory(Path.Combine(repositoryPath, "solutions", "nested")).FullName;
+			if (nestedGlobalJsonExists)
+			{
+				File.WriteAllText(Path.Combine(solutionDirectory, "global.json"), "{}");
+			}
+
+			PackableProject[] projects =
+			[
+				new(Path.Combine(repositoryPath, "src", "A", "A.csproj"), "A", []),
+				new(Path.Combine(repositoryPath, "src", "B", "B.csproj"), "B", []),
+			];
+			PlanGenerator generator = new(new StubDiscoverer(projects),
+				new StubCommitReader([Commit("sdk-change", "build: change SDK", changedPath)]),
+				new StubTagReader(Tags()), new StubGraphBuilder(), new DirectoryBumpCalculator(), new StubPackageBumpCalculator());
+
+			ReleasePlan plan = generator.Generate(repositoryPath, Path.Combine(solutionDirectory, "Packages.slnx"));
+
+			if (releasesPackages)
+			{
+				using (Assert.Multiple())
+				{
+					await AssertVersions(plan, ("A", "1.2.4"), ("B", "2.3.5"));
+					await AssertCommitReason(plan, "A", SemverBump.Patch, "sdk-change");
+					await AssertCommitReason(plan, "B", SemverBump.Patch, "sdk-change");
+				}
+			}
+			else
+			{
+				await Assert.That(plan.Packages).IsEmpty();
+			}
+		}
+		finally
+		{
+			Directory.Delete(repositoryPath, recursive: true);
+		}
+	}
+
+	[Test]
 	public async Task PassesSolutionDirectoryToBumpCalculator()
 	{
 		StubDirectoryBumpCalculator calculator = new();
@@ -441,7 +490,7 @@ public sealed class PlanGeneratorTests
 		public string? SolutionDirectory { get; private set; }
 
 		public Dictionary<string, SemverBump> Calculate(IEnumerable<GitCommitDetails> commits, IEnumerable<string> directories,
-			string solutionDirectory)
+			string solutionDirectory, IReadOnlySet<string> globalJsonPaths)
 		{
 			SolutionDirectory = solutionDirectory;
 			Dictionary<string, SemverBump> bumps = directories.ToDictionary(directory => directory,

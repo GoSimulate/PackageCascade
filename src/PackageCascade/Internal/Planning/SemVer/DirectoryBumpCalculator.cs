@@ -7,7 +7,7 @@ namespace PackageCascade.Internal.Planning.SemVer;
 internal sealed partial class DirectoryBumpCalculator : IDirectoryBumpCalculator
 {
 	public Dictionary<string, SemverBump> Calculate(IEnumerable<GitCommitDetails> commits, IEnumerable<string> directories,
-		string solutionDirectory)
+		string solutionDirectory, IReadOnlySet<string> globalJsonPaths)
 	{
 		Dictionary<string, SemverBump> bumps = new(StringComparer.Ordinal);
 		Dictionary<string, string> directoryPrefixes = new(StringComparer.Ordinal);
@@ -22,8 +22,8 @@ internal sealed partial class DirectoryBumpCalculator : IDirectoryBumpCalculator
 		foreach (GitCommitDetails commit in commits)
 		{
 			SemverBump bump = GetBump(commit.Message);
-			bool changesSolutionSharedFile = commit.ChangedPaths.Any(path => IsSolutionSharedFile(path, solutionPrefix));
-			if (changesSolutionSharedFile && bump < SemverBump.Patch)
+			bool changesSharedFile = commit.ChangedPaths.Any(path => IsSolutionSharedFile(path, solutionPrefix) || globalJsonPaths.Contains(path));
+			if (changesSharedFile && bump < SemverBump.Patch)
 			{
 				bump = SemverBump.Patch;
 			}
@@ -33,18 +33,18 @@ internal sealed partial class DirectoryBumpCalculator : IDirectoryBumpCalculator
 				continue;
 			}
 
-			ApplyBumpToAffectedDirectories(commit, bump, changesSolutionSharedFile, directoryPrefixes, bumps);
+			ApplyBumpToAffectedDirectories(commit, bump, changesSharedFile, directoryPrefixes, bumps);
 		}
 
 		return bumps;
 	}
 
-	private static void ApplyBumpToAffectedDirectories(GitCommitDetails commit, SemverBump bump, bool changesSolutionSharedFile,
+	private static void ApplyBumpToAffectedDirectories(GitCommitDetails commit, SemverBump bump, bool changesSharedFile,
 		IReadOnlyDictionary<string, string> directoryPrefixes, Dictionary<string, SemverBump> bumps)
 	{
 		foreach ((string directory, string prefix) in directoryPrefixes)
 		{
-			if ((changesSolutionSharedFile || commit.ChangedPaths.Any(path => path.StartsWith(prefix, StringComparison.Ordinal)))
+			if ((changesSharedFile || commit.ChangedPaths.Any(path => path.StartsWith(prefix, StringComparison.Ordinal)))
 				&& bump > bumps[directory])
 			{
 				bumps[directory] = bump;
@@ -57,7 +57,6 @@ internal sealed partial class DirectoryBumpCalculator : IDirectoryBumpCalculator
 		"Directory.Build.props" or
 		"Directory.Build.targets" or
 		"Directory.Packages.props" or
-		"global.json" or
 		"NuGet.Config";
 
 	private static SemverBump GetBump(string message)
