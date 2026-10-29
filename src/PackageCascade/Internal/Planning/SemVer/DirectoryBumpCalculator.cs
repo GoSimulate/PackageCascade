@@ -6,10 +6,12 @@ namespace PackageCascade.Internal.Planning.SemVer;
 
 internal sealed partial class DirectoryBumpCalculator : IDirectoryBumpCalculator
 {
-	public Dictionary<string, SemverBump> Calculate(IEnumerable<GitCommitDetails> commits, IEnumerable<string> directories)
+	public Dictionary<string, SemverBump> Calculate(IEnumerable<GitCommitDetails> commits, IEnumerable<string> directories,
+		string solutionDirectory)
 	{
 		Dictionary<string, SemverBump> bumps = new(StringComparer.Ordinal);
 		Dictionary<string, string> directoryPrefixes = new(StringComparer.Ordinal);
+		string solutionPrefix = solutionDirectory is "." or "" ? "" : solutionDirectory.TrimEnd('/', '\\').Replace('\\', '/') + "/";
 
 		foreach (string directory in directories)
 		{
@@ -20,8 +22,8 @@ internal sealed partial class DirectoryBumpCalculator : IDirectoryBumpCalculator
 		foreach (GitCommitDetails commit in commits)
 		{
 			SemverBump bump = GetBump(commit.Message);
-			bool changesRootSharedFile = commit.ChangedPaths.Any(IsRootSharedFile);
-			if (changesRootSharedFile && bump < SemverBump.Patch)
+			bool changesSolutionSharedFile = commit.ChangedPaths.Any(path => IsSolutionSharedFile(path, solutionPrefix));
+			if (changesSolutionSharedFile && bump < SemverBump.Patch)
 			{
 				bump = SemverBump.Patch;
 			}
@@ -31,18 +33,18 @@ internal sealed partial class DirectoryBumpCalculator : IDirectoryBumpCalculator
 				continue;
 			}
 
-			ApplyBumpToAffectedDirectories(commit, bump, changesRootSharedFile, directoryPrefixes, bumps);
+			ApplyBumpToAffectedDirectories(commit, bump, changesSolutionSharedFile, directoryPrefixes, bumps);
 		}
 
 		return bumps;
 	}
 
-	private static void ApplyBumpToAffectedDirectories(GitCommitDetails commit, SemverBump bump, bool changesRootSharedFile,
+	private static void ApplyBumpToAffectedDirectories(GitCommitDetails commit, SemverBump bump, bool changesSolutionSharedFile,
 		IReadOnlyDictionary<string, string> directoryPrefixes, Dictionary<string, SemverBump> bumps)
 	{
 		foreach ((string directory, string prefix) in directoryPrefixes)
 		{
-			if ((changesRootSharedFile || commit.ChangedPaths.Any(path => path.StartsWith(prefix, StringComparison.Ordinal)))
+			if ((changesSolutionSharedFile || commit.ChangedPaths.Any(path => path.StartsWith(prefix, StringComparison.Ordinal)))
 				&& bump > bumps[directory])
 			{
 				bumps[directory] = bump;
@@ -50,7 +52,8 @@ internal sealed partial class DirectoryBumpCalculator : IDirectoryBumpCalculator
 		}
 	}
 
-	private static bool IsRootSharedFile(string path) => path is
+	private static bool IsSolutionSharedFile(string path, string solutionPrefix) =>
+		path.StartsWith(solutionPrefix, StringComparison.Ordinal) && path[solutionPrefix.Length..] is
 		"Directory.Build.props" or
 		"Directory.Build.targets" or
 		"Directory.Packages.props" or
