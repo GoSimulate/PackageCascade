@@ -30,8 +30,7 @@ val licenceRules = ruleSet(ortResult, licenseInfoResolver, resolutionProvider) {
         }
 
         // ORT also visits the repository's project entries, which are not consumed packages.
-        val isTestProject = project.id.name.endsWith(".Tests.Unit.csproj") ||
-            project.id.name.endsWith(".Tests.Integration.csproj")
+        val isTestProject = project.id.name.substringAfterLast('/').contains(".Tests.")
         val isReviewedTestCoverage = isTestProject && pkg.metadata.id.toCoordinates() == testCoverageException
         if (pkg.metadata.id.type == "NuGet" && pkg.metadata.id.version.isNotEmpty() &&
             !isReviewedTestCoverage
