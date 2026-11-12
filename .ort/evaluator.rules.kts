@@ -18,9 +18,14 @@ val allowedLicences = (setOf(
 // Review new versions separately: https://www.nuget.org/packages/Microsoft.Testing.Extensions.CodeCoverage/18.10.0/license
 val testCoverageException = "NuGet:Microsoft.Testing:Extensions.CodeCoverage:18.10.0"
 
-fun PackageRule.LicenseRule.isOutsideAllowlist() = object : RuleMatcher {
+// These Microsoft .NET Library terms allow development and testing.
+// Keep this exact licence in test projects: https://scancode-licensedb.aboutcode.org/ms-net-library-2019-06.html
+val testOnlyDotNetLibraryLicence = "LicenseRef-scancode-ms-net-library-2019-06"
+
+fun PackageRule.LicenseRule.isOutsideAllowlist(isTestProject: Boolean) = object : RuleMatcher {
     override val description = "isOutsideAllowlist($license)"
-    override fun matches() = license !in allowedLicences
+    override fun matches() = license !in allowedLicences &&
+        !(isTestProject && license.toString() == testOnlyDotNetLibraryLicence)
 }
 
 val licenceRules = ruleSet(ortResult, licenseInfoResolver, resolutionProvider) {
@@ -47,7 +52,7 @@ val licenceRules = ruleSet(ortResult, licenseInfoResolver, resolutionProvider) {
             licenseRule("UNAPPROVED_PACKAGE_LICENCE", LicenseView.CONCLUDED_OR_DECLARED_OR_DETECTED) {
                 require {
                     -isExcluded()
-                    +isOutsideAllowlist()
+                    +isOutsideAllowlist(isTestProject)
                 }
 
                 error(
