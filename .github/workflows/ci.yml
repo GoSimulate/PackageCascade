@@ -103,16 +103,10 @@ jobs:
           git -C "$fixture" add .
           git -C "$fixture" -c user.name='PackageCascade CI' -c user.email='ci@example.invalid' commit -m 'chore: add fixture'
           ./artifacts/cli/PackageCascade.Cli plan "$fixture/Packages.slnx" --repository "$fixture" --outfile "$fixture/plan.json"
-          python3 - "$fixture/plan.json" <<'PY'
-          import json
-          import sys
-
-          with open(sys.argv[1], encoding='utf-8') as plan_file:
-              plan = json.load(plan_file)
-          assert len(plan['Packages']) == 1, plan
-          package = plan['Packages'][0]
-          assert package['PackageId'] == 'Fixture', package
-          assert package['ProjectPath'] == 'src/Fixture/Fixture.csproj', package
-          assert package['Version'] == '0.1.0', package
-          assert package['Reasons'] == [{'Type': 'InitialRelease'}], package
-          PY
+          jq -e '
+            .Packages | length == 1 and
+              .[0].PackageId == "Fixture" and
+              .[0].ProjectPath == "src/Fixture/Fixture.csproj" and
+              .[0].Version == "0.1.0" and
+              .[0].Reasons == [{"Type": "InitialRelease"}]
+          ' "$fixture/plan.json"
