@@ -76,7 +76,7 @@ jobs:
         with:
           global-json-file: global.json
       - name: Publish CLI
-        run: dotnet publish src/PackageCascade.Cli/PackageCascade.Cli.csproj -c Release -r ${{ matrix.rid }} --self-contained true -o artifacts/cli -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -p:DebugType=embedded
+        run: dotnet publish src/PackageCascade.Cli/PackageCascade.Cli.csproj -c Release -r ${{ matrix.rid }} --self-contained true -o artifacts/cli -p:DebugType=embedded
       - name: Run CLI help
         shell: bash
         run: ./artifacts/cli/${{ matrix.binary }} --help
