@@ -71,7 +71,6 @@ jobs:
             output="artifacts/cli/$rid"
             dotnet publish src/PackageCascade.Cli/PackageCascade.Cli.csproj \
               -c Release -r "$rid" --self-contained true -o "$output" \
-              -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true \
               -p:DebugType=embedded \
               -p:Version="$VERSION" -p:ContinuousIntegrationBuild=true -p:RepositoryUrl="$REPOSITORY_URL"
 

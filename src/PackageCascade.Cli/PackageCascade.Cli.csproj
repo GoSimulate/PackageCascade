@@ -8,6 +8,16 @@
         <IsPackable>false</IsPackable>
     </PropertyGroup>
 
+    <PropertyGroup Condition="'$(Configuration)' == 'Release' and '$(RuntimeIdentifier)' != ''">
+        <PublishSingleFile>true</PublishSingleFile>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
+        <!-- In-process MSBuild loads assemblies from disk, so the bundle must extract all content. -->
+        <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+        <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+    </PropertyGroup>
+
     <ItemGroup>
       <InternalsVisibleTo Include="PackageCascade.Cli.Tests.Unit" />
     </ItemGroup>
