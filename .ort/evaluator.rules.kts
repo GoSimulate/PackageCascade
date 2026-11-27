@@ -15,8 +15,8 @@ val allowedLicences = (setOf(
 
 // TUnit pulls this test-only coverage tool into the template. Microsoft .NET
 // Library terms permit development and testing, but it is not an SPDX licence.
-// Review new versions separately: https://www.nuget.org/packages/Microsoft.Testing.Extensions.CodeCoverage/18.10.0/license
-val testCoverageException = "NuGet:Microsoft.Testing:Extensions.CodeCoverage:18.10.0"
+// Allow all versions of this exact package in test projects without individual version review.
+// Terms reviewed: https://www.nuget.org/packages/Microsoft.Testing.Extensions.CodeCoverage/18.10.0/license
 
 // These Microsoft .NET Library terms allow development and testing.
 // Keep this exact licence in test projects: https://scancode-licensedb.aboutcode.org/ms-net-library-2019-06.html
@@ -36,7 +36,9 @@ val licenceRules = ruleSet(ortResult, licenseInfoResolver, resolutionProvider) {
 
         // ORT also visits the repository's project entries, which are not consumed packages.
         val isTestProject = project.id.name.substringAfterLast('/').contains(".Tests.")
-        val isReviewedTestCoverage = isTestProject && pkg.metadata.id.toCoordinates() == testCoverageException
+        val isReviewedTestCoverage = isTestProject && pkg.metadata.id.let {
+            it.type == "NuGet" && it.namespace == "Microsoft.Testing" && it.name == "Extensions.CodeCoverage"
+        }
         if (pkg.metadata.id.type == "NuGet" && pkg.metadata.id.version.isNotEmpty() &&
             !isReviewedTestCoverage
         ) {
